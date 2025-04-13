@@ -1,9 +1,13 @@
 # config/config.yaml
-llama_reward:
-  model_id: "infly/INF-ORM-Llama3.1-70B"  # Changed to infly model
-  quantization: "null"  # Options: "4bit", "8bit", or null for no quantization
-  device_map: "auto"
-  max_length: 2048
+nim_reward:
+  api_key: "${NVIDIA_NIM_API_KEY}"
+  api_url: "https://api.nim.nvidia.com/v1/llm"
+  model_id: "llama-3.1-nemotron-70b-reward"
+  max_calls_per_minute: 40  # Rate limit
+  max_retries: 3
+  retry_delay: 2.0
+  max_batch_size: 10
+  num_workers: 4
 
 gemini:
   api_key: "${GEMINI_API_KEY}"
@@ -45,7 +49,7 @@ wandb:
 
 rlhf:
   ppo:
-    model_name: "meta-llama/Meta-Llama-3.1-Instruct-8B"  # Base model to fine-tune
+    model_name: "meta-llama/Meta-Llama-3.1-Instruct-8B"
     batch_size: 8
     mini_batch_size: 1
     gradient_accumulation_steps: 1
@@ -54,8 +58,8 @@ rlhf:
     kl_penalty: 0.2
   
   dpo:
-    model_name: "meta-llama/Meta-Llama-3.1-Instruct-8B"  # Base model to fine-tune
+    model_name: "meta-llama/Meta-Llama-3.1-Instruct-8B"
     learning_rate: 5e-7
     batch_size: 4
     gradient_accumulation_steps: 1
-    beta: 0.1  # KL penalty coefficient
+    beta: 0.1

@@ -10,7 +10,7 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 
 from utils.logging_utils import setup_logging
-from models.llama_reward import LlamaRewardModel
+from models.nim_reward import BatchProcessingNimLlamaRewardModel
 from utils.embedding_utils import GeminiEmbedding
 from data.processors import SHPDataProcessor, create_dataloaders
 from models.reward_model import LinearRewardModel
@@ -70,12 +70,16 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
     
-    # Initialize Llama Reward model
-    llama_reward_model = LlamaRewardModel(
-        model_id=config["llama_reward"]["model_id"],  # This now uses infly/INF-ORM-Llama3.1-70B
-        quantization=config["llama_reward"]["quantization"],
-        device_map=config["llama_reward"]["device_map"],
-        max_length=config["llama_reward"]["max_length"]
+    # Initialize Llama 3.1 Nemotron Reward model via NIM API
+    nim_reward_model = BatchProcessingNimLlamaRewardModel(
+        api_key=config["nim_reward"]["api_key"],
+        api_url=config["nim_reward"]["api_url"],
+        model_id=config["nim_reward"]["model_id"],
+        max_calls_per_minute=config["nim_reward"]["max_calls_per_minute"],
+        max_retries=config["nim_reward"]["max_retries"],
+        retry_delay=config["nim_reward"]["retry_delay"],
+        max_batch_size=config["nim_reward"]["max_batch_size"],
+        num_workers=config["nim_reward"]["num_workers"]
     )
     
     # Initialize Gemini Embedding
@@ -92,7 +96,7 @@ def main():
         
         # Create dataloaders
         train_dataloader, val_dataloader, test_dataloader = create_dataloaders(
-            config, train_data, val_data, test_data, llama_reward_model, gemini_embedding
+            config, train_data, val_data, test_data, nim_reward_model, gemini_embedding
         )
         
         # Initialize model
@@ -132,7 +136,7 @@ def main():
         
         # Create test dataloader
         _, _, test_dataloader = create_dataloaders(
-            config, None, None, test_data, llama_reward_model, gemini_embedding
+            config, None, None, test_data, nim_reward_model, gemini_embedding
         )
         
         # Load model
@@ -162,7 +166,7 @@ def main():
         # Initialize predictor
         predictor = RewardPredictor(
             model_path=args.model_path,
-            llama_reward_model=llama_reward_model,
+            nim_reward_model=nim_reward_model,
             gemini_embedding=gemini_embedding,
             device=device
         )
@@ -179,7 +183,7 @@ def main():
         # Initialize predictor
         predictor = RewardPredictor(
             model_path=args.model_path,
-            llama_reward_model=llama_reward_model,
+            nim_reward_model=nim_reward_model,
             gemini_embedding=gemini_embedding,
             device=device
         )
@@ -220,7 +224,7 @@ def main():
         # Initialize predictor
         predictor = RewardPredictor(
             model_path=args.model_path,
-            llama_reward_model=llama_reward_model,
+            nim_reward_model=nim_reward_model,
             gemini_embedding=gemini_embedding,
             device=device
         )

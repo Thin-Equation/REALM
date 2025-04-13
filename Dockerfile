@@ -1,12 +1,12 @@
 # Dockerfile
-FROM pytorch/pytorch:2.0.1-cuda11.7-cudnn8-runtime
+FROM python:3.9-slim
 
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
+    build-essential \
     git \
-    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install dependencies
@@ -16,14 +16,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Create necessary directories
+RUN mkdir -p /app/models
+RUN mkdir -p /app/logs
+RUN mkdir -p /app/cache
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV TRANSFORMERS_CACHE=/app/.cache/huggingface
+ENV NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY}
+ENV GEMINI_API_KEY=${GEMINI_API_KEY}
+ENV MODEL_PATH=/app/models/final_model.pt
 
-# Create directories
-RUN mkdir -p /app/models/checkpoints
-RUN mkdir -p /app/logs
-RUN mkdir -p /app/.cache/huggingface
+# Expose port for API
+EXPOSE 8000
 
-# Default command
-CMD ["python", "main.py", "--config", "config/config.yaml", "--mode", "train"]
+# Set command
+CMD ["python", "api_server.py"]

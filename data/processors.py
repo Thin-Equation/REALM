@@ -9,7 +9,7 @@ from datasets import load_dataset
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
-from models.llama_reward import LlamaRewardModel
+from models.nim_reward import BatchProcessingNimLlamaRewardModel
 from utils.embedding_utils import GeminiEmbedding, cosine_similarity
 
 logger = logging.getLogger(__name__)
@@ -50,14 +50,14 @@ class SHPRewardDataset(Dataset):
     def __init__(
         self, 
         data,
-        llama_reward_model: LlamaRewardModel,
+        nim_reward_model: BatchProcessingNimLlamaRewardModel,
         gemini_embedding: GeminiEmbedding,
         cache_dir: str,
         max_length: int = 1024,
         rebuild_cache: bool = False
     ):
         self.data = data
-        self.llama_reward_model = llama_reward_model
+        self.nim_reward_model = nim_reward_model
         self.gemini_embedding = gemini_embedding
         self.cache_dir = cache_dir
         self.max_length = max_length
@@ -99,8 +99,8 @@ class SHPRewardDataset(Dataset):
             rejected = rejected[:self.max_length]
         
         # Get Llama 3.1 reward scores
-        chosen_llama_score = self.llama_reward_model.get_reward_score(prompt, chosen)
-        rejected_llama_score = self.llama_reward_model.get_reward_score(prompt, rejected)
+        chosen_llama_score = self.nim_reward_model.get_reward_score(prompt, chosen)
+        rejected_llama_score = self.nim_reward_model.get_reward_score(prompt, rejected)
         
         # Get Gemini embeddings
         prompt_embedding = self.gemini_embedding.get_embedding(prompt)
@@ -138,7 +138,7 @@ def create_dataloaders(
     train_data,
     val_data,
     test_data,
-    llama_reward_model: LlamaRewardModel,
+    nim_reward_model: BatchProcessingNimLlamaRewardModel,
     gemini_embedding: GeminiEmbedding
 ) -> Tuple[Optional[DataLoader], Optional[DataLoader], Optional[DataLoader]]:
     """Create dataloaders for training, validation, and testing"""
@@ -152,7 +152,7 @@ def create_dataloaders(
     # Create datasets and dataloaders if data is provided
     if train_data is not None:
         train_dataset = SHPRewardDataset(
-            train_data, llama_reward_model, gemini_embedding, 
+            train_data, nim_reward_model, gemini_embedding, 
             os.path.join(cache_dir, "train"),
             max_length
         )
@@ -167,7 +167,7 @@ def create_dataloaders(
     
     if val_data is not None:
         val_dataset = SHPRewardDataset(
-            val_data, llama_reward_model, gemini_embedding, 
+            val_data, nim_reward_model, gemini_embedding, 
             os.path.join(cache_dir, "validation"),
             max_length
         )
@@ -182,7 +182,7 @@ def create_dataloaders(
     
     if test_data is not None:
         test_dataset = SHPRewardDataset(
-            test_data, llama_reward_model, gemini_embedding, 
+            test_data, nim_reward_model, gemini_embedding, 
             os.path.join(cache_dir, "test"),
             max_length
         )

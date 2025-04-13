@@ -3,9 +3,10 @@ import os
 import torch
 import logging
 from typing import Dict, Any, Optional, List, Tuple
+import numpy as np
 
 from models.reward_model import LinearRewardModel
-from models.llama_reward import LlamaRewardModel
+from models.nim_reward import BatchProcessingNimLlamaRewardModel
 from utils.embedding_utils import GeminiEmbedding, cosine_similarity
 
 logger = logging.getLogger(__name__)
@@ -16,9 +17,10 @@ class RewardPredictor:
     def __init__(
         self,
         model_path: str,
-        llama_reward_model: LlamaRewardModel,
+        nim_reward_model: BatchProcessingNimLlamaRewardModel,
         gemini_embedding: GeminiEmbedding,
-        device: Optional[torch.device] = None
+        device: Optional[torch.device] = None,
+        cache_size: int = 1000
     ):
         # Set device
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -28,19 +30,56 @@ class RewardPredictor:
         self.model.eval()
         
         # Models for feature extraction
-        self.llama_reward_model = llama_reward_model
+        self.nim_reward_model = nim_reward_model
         self.gemini_embedding = gemini_embedding
+        
+        # Cache for scores and embeddings
+        self.llama_score_cache = {}
+        self.embedding_cache = {}
+        self.cache_size = cache_size
         
         logger.info(f"Reward predictor initialized with model from {model_path}")
     
+    def _get_llama_score(self, prompt: str, response: str) -> float:
+        """Get Llama reward score with caching"""
+        cache_key = f"{hash(prompt)}_{hash(response)}"
+        if cache_key in self.llama_score_cache:
+            return self.llama_score_cache[cache_key]
+        
+        score = self.nim_reward_model.get_reward_score(prompt, response)
+        
+        # Cache the result
+        if len(self.llama_score_cache) >= self.cache_size:
+            # Remove a random item if cache is full
+            self.llama_score_cache.pop(next(iter(self.llama_score_cache)))
+        self.llama_score_cache[cache_key] = score
+        
+        return score
+    
+    def _get_embedding(self, text: str) -> np.ndarray:
+        """Get embedding with caching"""
+        cache_key = hash(text)
+        if cache_key in self.embedding_cache:
+            return self.embedding_cache[cache_key]
+        
+        embedding = self.gemini_embedding.get_embedding(text)
+        
+        # Cache the result
+        if len(self.embedding_cache) >= self.cache_size:
+            # Remove a random item if cache is full
+            self.embedding_cache.pop(next(iter(self.embedding_cache)))
+        self.embedding_cache[cache_key] = embedding
+        
+        return embedding
+    
     def predict(self, prompt: str, response: str) -> float:
         """Predict the reward for a prompt-response pair"""
-        # Get Llama 3.1 reward score
-        llama_score = self.llama_reward_model.get_reward_score(prompt, response)
+        # Get Llama score (with caching)
+        llama_score = self._get_llama_score(prompt, response)
         
-        # Get Gemini embeddings
-        prompt_embedding = self.gemini_embedding.get_embedding(prompt)
-        response_embedding = self.gemini_embedding.get_embedding(response)
+        # Get embeddings (with caching)
+        prompt_embedding = self._get_embedding(prompt)
+        response_embedding = self._get_embedding(response)
         
         # Calculate similarity score
         similarity = cosine_similarity(prompt_embedding, response_embedding)
