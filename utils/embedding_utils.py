@@ -3,7 +3,8 @@ import os
 import logging
 import numpy as np
 from typing import List, Dict, Any, Optional
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
 from dotenv import load_dotenv
 
@@ -28,46 +29,54 @@ class GeminiEmbedding:
         self.model_id = model_id
         self.task_type = task_type
         
-        # Configure Gemini API
-        genai.configure(api_key=self.api_key)
+        # Configure Gemini API with the new client approach
+        self.client = genai.Client(api_key=self.api_key)
         logger.info(f"Initialized Gemini Embedding with model: {model_id}")
     
+    # utils/embedding_utils.py
     def get_embedding(self, text: str, max_retries: int = 3) -> List[float]:
-        """Get embedding for text from Gemini Embedding model"""
+        """Get embedding for text from Gemini Embedding model with fallback mechanisms"""
         retries = 0
         backoff_time = 1
         
         while retries < max_retries:
             try:
-                embedding = genai.embed_content(
-                    model=self.model_id,
-                    content=text,
-                    task_type=self.task_type
+                # Primary approach
+                embedding_model = self.client.get_model(self.model_id)
+                content = types.Content(parts=[types.Part(text=text)])
+                embedding_response = embedding_model.embed_content(
+                    task_type=self.task_type,
+                    content=content
                 )
                 
                 # Extract embedding values
-                if embedding and hasattr(embedding, "embedding"):
-                    return embedding.embedding
-                elif embedding and isinstance(embedding, dict) and "embedding" in embedding:
-                    return embedding["embedding"]
-                elif embedding and isinstance(embedding, dict) and "embeddings" in embedding:
-                    return embedding["embeddings"][0]["values"]
-                else:
-                    logger.error(f"Unexpected Gemini embedding response format: {embedding}")
-                    retries += 1
-                    backoff_time *= 2
-                    import time
-                    time.sleep(backoff_time)
+                if embedding_response and hasattr(embedding_response, "embedding"):
+                    return embedding_response.embedding.values
+                elif hasattr(embedding_response, "embeddings") and embedding_response.embeddings:
+                    return embedding_response.embeddings[0].values
+                    
+            except Exception as primary_error:
+                logger.warning(f"Primary embedding approach failed: {primary_error}")
+                try:
+                    # Fallback approach for different API versions
+                    embeddings = self.client.embeddings.create(
+                        model=self.model_id,
+                        input=text
+                    )
+                    if hasattr(embeddings, "data") and len(embeddings.data) > 0:
+                        return embeddings.data[0].embedding
+                except Exception as fallback_error:
+                    logger.warning(f"Fallback embedding approach also failed: {fallback_error}")
             
-            except Exception as e:
-                logger.error(f"Exception calling Gemini API: {str(e)}")
-                retries += 1
-                backoff_time *= 2
+            retries += 1
+            if retries < max_retries:
+                sleep_time = backoff_time * (2 ** retries)
+                logger.info(f"Retrying embedding in {sleep_time}s...")
                 import time
-                time.sleep(backoff_time)
+                time.sleep(sleep_time)
         
         # Return empty embedding if all retries failed
-        logger.warning("All retries failed for Gemini API call, returning empty embedding")
+        logger.warning("All embedding attempts failed, returning zeros")
         return [0.0] * 768  # Default dimension for Gemini embeddings
     
     def batch_get_embeddings(self, texts: List[str]) -> List[List[float]]:

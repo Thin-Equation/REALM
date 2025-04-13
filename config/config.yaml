@@ -1,17 +1,14 @@
 # config/config.yaml
 nim_reward:
   api_key: "${NVIDIA_NIM_API_KEY}"
-  api_url: "https://api.nim.nvidia.com/v1/llm"
+  base_url: "https://integrate.api.nvidia.com/v1"
   model_id: "llama-3.1-nemotron-70b-reward"
-  max_calls_per_minute: 40  # Rate limit
   max_retries: 3
   retry_delay: 2.0
-  max_batch_size: 10
-  num_workers: 4
 
 gemini:
   api_key: "${GEMINI_API_KEY}"
-  model_id: "models/embedding-001"
+  model_id: "gemini-embedding-exp-03-07"
   task_type: "retrieval_document"
 
 data:

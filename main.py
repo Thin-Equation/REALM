@@ -9,6 +9,7 @@ import numpy as np
 from typing import Dict, Any
 from dotenv import load_dotenv
 
+from utils.validation import validate_environment
 from utils.logging_utils import setup_logging
 from models.nim_reward import BatchProcessingNimLlamaRewardModel
 from utils.embedding_utils import GeminiEmbedding
@@ -58,6 +59,10 @@ def main():
     
     # Load configuration
     config = load_config(args.config)
+
+    # Validate environment first
+    logger.info("Validating environment...")
+    validate_environment()
     
     # Setup logging
     logger = setup_logging()
@@ -71,15 +76,12 @@ def main():
     logger.info(f"Using device: {device}")
     
     # Initialize Llama 3.1 Nemotron Reward model via NIM API
-    nim_reward_model = BatchProcessingNimLlamaRewardModel(
+    nim_reward_model = NIMRewardModel(
         api_key=config["nim_reward"]["api_key"],
-        api_url=config["nim_reward"]["api_url"],
+        base_url=config["nim_reward"]["base_url"],
         model_id=config["nim_reward"]["model_id"],
-        max_calls_per_minute=config["nim_reward"]["max_calls_per_minute"],
         max_retries=config["nim_reward"]["max_retries"],
-        retry_delay=config["nim_reward"]["retry_delay"],
-        max_batch_size=config["nim_reward"]["max_batch_size"],
-        num_workers=config["nim_reward"]["num_workers"]
+        retry_delay=config["nim_reward"]["retry_delay"]
     )
     
     # Initialize Gemini Embedding

@@ -6,7 +6,6 @@ from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
 
 from models.reward_model import LinearRewardModel
-from models.nim_reward import BatchProcessingNimLlamaRewardModel
 from utils.embedding_utils import GeminiEmbedding, cosine_similarity
 
 logger = logging.getLogger(__name__)
@@ -17,7 +16,7 @@ class RewardPredictor:
     def __init__(
         self,
         model_path: str,
-        nim_reward_model: BatchProcessingNimLlamaRewardModel,
+        nim_reward_model: NIMRewardModel,
         gemini_embedding: GeminiEmbedding,
         device: Optional[torch.device] = None,
         cache_size: int = 1000
@@ -92,26 +91,3 @@ class RewardPredictor:
             reward = self.model(features.unsqueeze(0))
         
         return reward.item()
-    
-    def batch_predict(self, prompts: List[str], responses: List[str]) -> List[float]:
-        """Predict rewards for a batch of prompt-response pairs"""
-        if len(prompts) != len(responses):
-            raise ValueError("Number of prompts and responses must be the same")
-        
-        rewards = []
-        for prompt, response in zip(prompts, responses):
-            reward = self.predict(prompt, response)
-            rewards.append(reward)
-        
-        return rewards
-    
-    def compare(self, prompt: str, response1: str, response2: str) -> Tuple[float, float, int]:
-        """Compare two responses for the same prompt"""
-        reward1 = self.predict(prompt, response1)
-        reward2 = self.predict(prompt, response2)
-        
-        # Return rewards and comparison result (1 if response1 is better, 2 if response2 is better)
-        if reward1 > reward2:
-            return reward1, reward2, 1
-        else:
-            return reward1, reward2, 2

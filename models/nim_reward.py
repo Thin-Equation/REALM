@@ -63,131 +63,105 @@ class RateLimiter:
         return wrapper
 
 
-class NimLlamaRewardModel:
-    """Wrapper for llama-3.1-nemotron-70b-reward model via Nvidia NIM API"""
+class NIMRewardModel:
+    """Wrapper for Llama 3.1 Nemotron 70B Reward model via NVIDIA NIM API"""
     
+    # models/nim_reward.py
     def __init__(
         self, 
         api_key: str,
-        api_url: str = "https://api.nim.nvidia.com/v1/llm",
+        base_url: str = "https://api.nim.nvidia.com/v1",
         model_id: str = "llama-3.1-nemotron-70b-reward",
-        max_calls_per_minute: int = 40,
         max_retries: int = 3,
         retry_delay: float = 2.0,
-        max_batch_size: int = 10,
     ):
-        """
-        Initialize the Llama 3.1 Nemotron 70B Reward model via NIM API.
-        
-        Args:
-            api_key: Nvidia NIM API key
-            api_url: Nvidia NIM API endpoint URL
-            model_id: Model ID to use for inference
-            max_calls_per_minute: Maximum API calls per minute (rate limit)
-            max_retries: Maximum number of retries for failed API calls
-            retry_delay: Initial delay between retries (will be exponentially increased)
-            max_batch_size: Maximum batch size for batch inference
-        """
+        """Initialize the Llama 3.1 Nemotron 70B Reward model via NIM API."""
         self.api_key = api_key
-        self.api_url = api_url
-        self.model_id = model_id
         self.max_retries = max_retries
         self.retry_delay = retry_delay
-        self.max_batch_size = max_batch_size
         
-        # Initialize rate limiter
-        self.rate_limiter = RateLimiter(max_calls_per_minute)
+        # Try to initialize the client with better error handling
+        try:
+            self.client = OpenAI(
+                base_url=base_url,
+                api_key=api_key
+            )
+            # Test the connection
+            response = self.client.models.list()
+            logger.info(f"Successfully connected to NIM API")
+            
+            # Find the correct model name
+            self.model_id = self._find_working_model_name(model_id)
+            logger.info(f"Using model: {self.model_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize NIM API client: {e}")
+            raise
+
+    def _find_working_model_name(self, primary_model):
+        """Try different model name formats if the primary one fails"""
+        model_variants = [
+            primary_model,
+            f"nvidia/{primary_model}",
+            "llama31-nemotron-70b-reward",
+            "nem70b-reward"
+        ]
         
-        # Initialize request session
-        self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        })
+        for model_name in model_variants:
+            try:
+                # Test with a simple request
+                self.client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": "test"}],
+                    max_tokens=1
+                )
+                return model_name
+            except Exception as e:
+                logger.warning(f"Failed with model name {model_name}: {e}")
         
-        logger.info(f"Initialized NIM Llama Reward Model: {model_id}")
+        raise ValueError("Could not find a working reward model name")
     
     def format_prompt(self, prompt: str, response: str) -> str:
         """Format prompt and response for the reward model"""
         # Format for Llama 3.1 Nemotron reward model
-        formatted_text = f"<|user|>\n{prompt}\n<|assistant|>\n{response}"
-        return formatted_text
-    
-    def _call_api(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Make a rate-limited call to the NIM API
-        
-        Args:
-            payload: Request payload to send to the API
-            
-        Returns:
-            API response as a dictionary
-        """
-        # Apply rate limiting
-        self.rate_limiter.wait()
-        
-        url = f"{self.api_url}/completions"
-        
-        for attempt in range(self.max_retries):
-            try:
-                response = self.session.post(url, json=payload)
-                
-                if response.status_code == 200:
-                    return response.json()
-                elif response.status_code == 429:  # Rate limit exceeded
-                    retry_after = int(response.headers.get('Retry-After', self.retry_delay * (2 ** attempt)))
-                    logger.warning(f"Rate limit exceeded. Waiting for {retry_after} seconds.")
-                    time.sleep(retry_after)
-                else:
-                    logger.error(f"API error: {response.status_code} - {response.text}")
-                    if attempt < self.max_retries - 1:
-                        sleep_time = self.retry_delay * (2 ** attempt)
-                        logger.info(f"Retrying in {sleep_time} seconds...")
-                        time.sleep(sleep_time)
-                    else:
-                        raise Exception(f"API error: {response.status_code} - {response.text}")
-            
-            except Exception as e:
-                logger.error(f"API call failed: {str(e)}")
-                if attempt < self.max_retries - 1:
-                    sleep_time = self.retry_delay * (2 ** attempt)
-                    logger.info(f"Retrying in {sleep_time} seconds...")
-                    time.sleep(sleep_time)
-                else:
-                    raise e
-        
-        raise Exception(f"Failed to call API after {self.max_retries} attempts")
+        return f"<|user|>\n{prompt}\n<|assistant|>\n{response}"
     
     def get_reward_score(self, prompt: str, response: str) -> float:
         """Get reward score for a prompt-response pair"""
         try:
-            # Format the input
-            formatted_input = self.format_prompt(prompt, response)
+            # Format messages for the OpenAI API format
+            formatted_content = self.format_prompt(prompt, response)
             
-            # Prepare the payload for Nemotron reward model
-            payload = {
-                "model": self.model_id,
-                "messages": [
+            # Make the API call for reward prediction
+            # Using chat completions API to get reward score
+            reward_response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=[
                     {"role": "user", "content": prompt},
                     {"role": "assistant", "content": response}
                 ],
-                "temperature": 0.0,  # We want deterministic scoring
-                "task_type": "reward",  # Specify the task type for reward models
-            }
+                temperature=0.0,  # Deterministic output
+                max_tokens=1,  # We only need the reward score
+                task_type="reward"  # Specify that we want a reward score
+            )
             
-            # Call the API with rate limiting
-            result = self._call_api(payload)
-            
-            # Extract reward score from the response
-            # Adjust based on the actual NIM API response format
-            if "choices" in result and len(result["choices"]) > 0:
-                if "reward" in result["choices"][0]:
-                    reward = result["choices"][0]["reward"]
+            # Extract reward score from response
+            # The structure may vary based on the actual API response format
+            if hasattr(reward_response, "choices") and len(reward_response.choices) > 0:
+                if hasattr(reward_response.choices[0], "reward"):
+                    reward = reward_response.choices[0].reward
+                elif hasattr(reward_response, "reward_score"):
+                    reward = reward_response.reward_score
                 else:
-                    # Extract from metadata if provided in a different format
-                    reward = result.get("reward_score", 0.0)
+                    # If response structure is different, try to extract from message content
+                    content = reward_response.choices[0].message.content
+                    try:
+                        reward = float(content.strip())
+                    except (ValueError, TypeError):
+                        logger.warning(f"Could not extract reward from response content: {content}")
+                        reward = 0.0
             else:
-                logger.warning(f"Unexpected API response format: {result}")
+                logger.warning(f"Unexpected API response format: {reward_response}")
                 reward = 0.0
             
             return float(reward)
@@ -202,21 +176,14 @@ class NimLlamaRewardModel:
         if len(prompts) != len(responses):
             raise ValueError("Number of prompts and responses must be the same")
         
-        all_rewards = []
+        # Process each prompt-response pair individually
+        # This is because reward models typically don't support batch processing
+        rewards = []
+        for prompt, response in zip(prompts, responses):
+            reward = self.get_reward_score(prompt, response)
+            rewards.append(reward)
         
-        # Process in smaller batches to respect API limitations
-        for i in range(0, len(prompts), self.max_batch_size):
-            batch_prompts = prompts[i:i+self.max_batch_size]
-            batch_responses = responses[i:i+self.max_batch_size]
-            
-            batch_rewards = []
-            for prompt, response in zip(batch_prompts, batch_responses):
-                reward = self.get_reward_score(prompt, response)
-                batch_rewards.append(reward)
-            
-            all_rewards.extend(batch_rewards)
-        
-        return all_rewards
+        return rewards
 
 
 class BatchProcessingNimLlamaRewardModel(NimLlamaRewardModel):
