@@ -13,9 +13,6 @@ Architecture Overview
 - 🔄 Ready-to-use implementations for PPO and DPO fine-tuning
 - 🐳 Docker support for reproducible deployment
 
-## Models from Hugging Face for REALM
-Reward Model - https://huggingface.co/nvidia/Llama-3.1-Nemotron-70B-Reward
-
 ## Installation
 
 ### Prerequisites
@@ -243,6 +240,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgements
 
+- [nvidia/Llama-3.1-Nemotron-70B-Reward](https://huggingface.co/nvidia/Llama-3.1-Nemotron-70B-Reward) for the reward model 
 - [infly/INF-ORM-Llama3.1-70B](https://huggingface.co/infly/INF-ORM-Llama3.1-70B) for the reward model
 - [Google Gemini API](https://ai.google.dev/gemini-api) for the embedding model
 - [Stanford NLP](https://huggingface.co/datasets/stanfordnlp/SHP) for the SHP dataset
