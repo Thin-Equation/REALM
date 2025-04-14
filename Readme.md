@@ -13,6 +13,8 @@ Architecture Overview
 - 🔄 Ready-to-use implementations for PPO and DPO fine-tuning
 - 🐳 Docker support for reproducible deployment
 
+## Models from Hugging Face for REALM
+Reward Model - https://huggingface.co/nvidia/Llama-3.1-Nemotron-70B-Reward
 
 ## Installation
 
