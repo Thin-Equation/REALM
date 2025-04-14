@@ -1,8 +1,7 @@
 # models/llama_reward.py
-import os
 import torch
 import logging
-from typing import Dict, List, Union, Optional
+from typing import List, Optional
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, BitsAndBytesConfig
 
 logger = logging.getLogger(__name__)

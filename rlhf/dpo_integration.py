@@ -2,15 +2,12 @@
 import os
 import torch
 import logging
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Tuple
 from trl import DPOTrainer
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
 from datasets import Dataset
 from tqdm import tqdm
 
-from models.reward_model import LinearRewardModel
-from models.llama_reward import LlamaRewardModel
-from utils.embedding_utils import GeminiEmbedding
 from inference.predictor import RewardPredictor
 
 logger = logging.getLogger(__name__)

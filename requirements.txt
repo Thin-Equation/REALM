@@ -16,3 +16,4 @@ python-dotenv
 fastapi
 uvicorn
 requests
+openai

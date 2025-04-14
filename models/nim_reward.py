@@ -1,13 +1,9 @@
 # models/nim_reward.py
-import os
 import time
 import logging
-import requests
 import threading
-from typing import Dict, List, Union, Optional, Any
-import torch
-import numpy as np
-from queue import Queue, Empty
+from typing import List
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -129,47 +125,48 @@ class NIMRewardModel:
     def get_reward_score(self, prompt: str, response: str) -> float:
         """Get reward score for a prompt-response pair"""
         try:
-            # Format messages for the OpenAI API format
-            formatted_content = self.format_prompt(prompt, response)
+            # Format the input for chat completions API
+            messages = [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": response}
+            ]
             
-            # Make the API call for reward prediction
-            # Using chat completions API to get reward score
+            # Make the API call
             reward_response = self.client.chat.completions.create(
                 model=self.model_id,
-                messages=[
-                    {"role": "user", "content": prompt},
-                    {"role": "assistant", "content": response}
-                ],
-                temperature=0.0,  # Deterministic output
-                max_tokens=1,  # We only need the reward score
-                task_type="reward"  # Specify that we want a reward score
+                messages=messages,
+                temperature=0.0,
+                max_tokens=1
             )
             
             # Extract reward score from response
-            # The structure may vary based on the actual API response format
             if hasattr(reward_response, "choices") and len(reward_response.choices) > 0:
-                if hasattr(reward_response.choices[0], "reward"):
-                    reward = reward_response.choices[0].reward
-                elif hasattr(reward_response, "reward_score"):
-                    reward = reward_response.reward_score
-                else:
-                    # If response structure is different, try to extract from message content
-                    content = reward_response.choices[0].message.content
-                    try:
-                        reward = float(content.strip())
-                    except (ValueError, TypeError):
-                        logger.warning(f"Could not extract reward from response content: {content}")
-                        reward = 0.0
-            else:
-                logger.warning(f"Unexpected API response format: {reward_response}")
-                reward = 0.0
+                choice = reward_response.choices[0]
+                
+                if hasattr(choice, "message") and hasattr(choice.message, "content"):
+                    content = choice.message.content.strip()
+                    
+                    # Parse the "reward:X" format
+                    if "reward:" in content:
+                        try:
+                            # Extract the numeric part after "reward:"
+                            reward_part = content.split("reward:")[1].strip()
+                            return float(reward_part)
+                        except (ValueError, IndexError) as e:
+                            logger.warning(f"Failed to parse reward value: {content}. Error: {e}")
+                            return 0.0
+                
+                # Try alternative reward locations if the content parsing fails
+                if hasattr(choice, "reward"):
+                    return float(choice.reward)
+                    
+            logger.warning(f"No valid reward found in response: {reward_response}")
+            return 0.0
             
-            return float(reward)
-        
         except Exception as e:
             logger.error(f"Error getting reward score: {str(e)}")
-            # Return default score in case of error
             return 0.0
+
     
     def batch_get_reward_scores(self, prompts: List[str], responses: List[str]) -> List[float]:
         """Get reward scores for batches of prompt-response pairs"""
@@ -186,98 +183,98 @@ class NIMRewardModel:
         return rewards
 
 
-class BatchProcessingNimLlamaRewardModel(NimLlamaRewardModel):
-    """
-    Enhanced version of NimLlamaRewardModel with parallel processing using a worker pool
-    for efficient handling of rate limits
-    """
+# class BatchProcessingNimLlamaRewardModel(NimLlamaRewardModel):
+#     """
+#     Enhanced version of NimLlamaRewardModel with parallel processing using a worker pool
+#     for efficient handling of rate limits
+#     """
     
-    def __init__(
-        self,
-        api_key: str,
-        api_url: str = "https://api.nim.nvidia.com/v1/llm",
-        model_id: str = "llama-3.1-nemotron-70b-reward",
-        max_calls_per_minute: int = 40,
-        max_retries: int = 3,
-        retry_delay: float = 2.0,
-        max_batch_size: int = 10,
-        num_workers: int = 4,
-    ):
-        """
-        Initialize with worker pool for parallel processing within rate limits
+#     def __init__(
+#         self,
+#         api_key: str,
+#         api_url: str = "https://api.nim.nvidia.com/v1/llm",
+#         model_id: str = "llama-3.1-nemotron-70b-reward",
+#         max_calls_per_minute: int = 40,
+#         max_retries: int = 3,
+#         retry_delay: float = 2.0,
+#         max_batch_size: int = 10,
+#         num_workers: int = 4,
+#     ):
+#         """
+#         Initialize with worker pool for parallel processing within rate limits
         
-        Args:
-            num_workers: Number of worker threads for parallel processing
-            (other args same as parent class)
-        """
-        super().__init__(
-            api_key=api_key,
-            api_url=api_url,
-            model_id=model_id,
-            max_calls_per_minute=max_calls_per_minute,
-            max_retries=max_retries,
-            retry_delay=retry_delay,
-            max_batch_size=max_batch_size,
-        )
+#         Args:
+#             num_workers: Number of worker threads for parallel processing
+#             (other args same as parent class)
+#         """
+#         super().__init__(
+#             api_key=api_key,
+#             api_url=api_url,
+#             model_id=model_id,
+#             max_calls_per_minute=max_calls_per_minute,
+#             max_retries=max_retries,
+#             retry_delay=retry_delay,
+#             max_batch_size=max_batch_size,
+#         )
         
-        self.num_workers = num_workers
+#         self.num_workers = num_workers
         
-        # Initialize work queue and worker threads
-        self.queue = Queue()
-        self.result_queue = Queue()
-        self.workers = []
+#         # Initialize work queue and worker threads
+#         self.queue = Queue()
+#         self.result_queue = Queue()
+#         self.workers = []
         
-        # Start worker threads
-        for _ in range(num_workers):
-            worker = threading.Thread(target=self._worker_loop, daemon=True)
-            worker.start()
-            self.workers.append(worker)
+#         # Start worker threads
+#         for _ in range(num_workers):
+#             worker = threading.Thread(target=self._worker_loop, daemon=True)
+#             worker.start()
+#             self.workers.append(worker)
     
-    def _worker_loop(self):
-        """Worker thread that processes reward requests from the queue"""
-        while True:
-            try:
-                # Get a task from the queue
-                task_id, prompt, response = self.queue.get()
+#     def _worker_loop(self):
+#         """Worker thread that processes reward requests from the queue"""
+#         while True:
+#             try:
+#                 # Get a task from the queue
+#                 task_id, prompt, response = self.queue.get()
                 
-                # Process the task
-                try:
-                    reward = super().get_reward_score(prompt, response)
-                    self.result_queue.put((task_id, reward))
-                except Exception as e:
-                    logger.error(f"Error in worker thread: {str(e)}")
-                    self.result_queue.put((task_id, 0.0))
+#                 # Process the task
+#                 try:
+#                     reward = super().get_reward_score(prompt, response)
+#                     self.result_queue.put((task_id, reward))
+#                 except Exception as e:
+#                     logger.error(f"Error in worker thread: {str(e)}")
+#                     self.result_queue.put((task_id, 0.0))
                 
-                # Mark the task as done
-                self.queue.task_done()
+#                 # Mark the task as done
+#                 self.queue.task_done()
             
-            except Empty:
-                # Queue is empty, wait a bit
-                time.sleep(0.1)
-            except Exception as e:
-                logger.error(f"Unexpected error in worker thread: {str(e)}")
-                time.sleep(1.0)
+#             except Empty:
+#                 # Queue is empty, wait a bit
+#                 time.sleep(0.1)
+#             except Exception as e:
+#                 logger.error(f"Unexpected error in worker thread: {str(e)}")
+#                 time.sleep(1.0)
     
-    def batch_get_reward_scores(self, prompts: List[str], responses: List[str]) -> List[float]:
-        """
-        Get reward scores for batches of prompt-response pairs using worker pool.
-        This method enables parallel processing within the rate limits.
-        """
-        if len(prompts) != len(responses):
-            raise ValueError("Number of prompts and responses must be the same")
+#     def batch_get_reward_scores(self, prompts: List[str], responses: List[str]) -> List[float]:
+#         """
+#         Get reward scores for batches of prompt-response pairs using worker pool.
+#         This method enables parallel processing within the rate limits.
+#         """
+#         if len(prompts) != len(responses):
+#             raise ValueError("Number of prompts and responses must be the same")
         
-        # Add all tasks to the queue
-        for i, (prompt, response) in enumerate(zip(prompts, responses)):
-            self.queue.put((i, prompt, response))
+#         # Add all tasks to the queue
+#         for i, (prompt, response) in enumerate(zip(prompts, responses)):
+#             self.queue.put((i, prompt, response))
         
-        # Wait for all tasks to be processed
-        self.queue.join()
+#         # Wait for all tasks to be processed
+#         self.queue.join()
         
-        # Collect results
-        results = {}
-        while not self.result_queue.empty():
-            task_id, reward = self.result_queue.get()
-            results[task_id] = reward
+#         # Collect results
+#         results = {}
+#         while not self.result_queue.empty():
+#             task_id, reward = self.result_queue.get()
+#             results[task_id] = reward
         
-        # Organize results in the original order
-        return [results.get(i, 0.0) for i in range(len(prompts))]
+#         # Organize results in the original order
+#         return [results.get(i, 0.0) for i in range(len(prompts))]

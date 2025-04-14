@@ -1,8 +1,7 @@
 # utils/embedding_utils.py
-import os
 import logging
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List
 from google import genai
 from google.genai import types
 from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
@@ -35,39 +34,33 @@ class GeminiEmbedding:
     
     # utils/embedding_utils.py
     def get_embedding(self, text: str, max_retries: int = 3) -> List[float]:
-        """Get embedding for text from Gemini Embedding model with fallback mechanisms"""
+        """Get embedding for text from Gemini Embedding model"""
         retries = 0
         backoff_time = 1
         
         while retries < max_retries:
             try:
-                # Primary approach
-                embedding_model = self.client.get_model(self.model_id)
-                content = types.Content(parts=[types.Part(text=text)])
-                embedding_response = embedding_model.embed_content(
-                    task_type=self.task_type,
-                    content=content
+                # The correct method for google-genai >= 1.10.0
+                embedding_result = self.client.models.embed_content(
+                    model=self.model_id,
+                    contents=text,
+                    config=types.EmbedContentConfig(task_type="SEMANTIC_SIMILARITY")
                 )
                 
-                # Extract embedding values
-                if embedding_response and hasattr(embedding_response, "embedding"):
-                    return embedding_response.embedding.values
-                elif hasattr(embedding_response, "embeddings") and embedding_response.embeddings:
-                    return embedding_response.embeddings[0].values
-                    
-            except Exception as primary_error:
-                logger.warning(f"Primary embedding approach failed: {primary_error}")
-                try:
-                    # Fallback approach for different API versions
-                    embeddings = self.client.embeddings.create(
-                        model=self.model_id,
-                        input=text
-                    )
-                    if hasattr(embeddings, "data") and len(embeddings.data) > 0:
-                        return embeddings.data[0].embedding
-                except Exception as fallback_error:
-                    logger.warning(f"Fallback embedding approach also failed: {fallback_error}")
-            
+                # Access the values correctly
+                if hasattr(embedding_result, "embeddings") and embedding_result.embeddings:
+                    # Extract the values from the first embedding
+                    return embedding_result.embeddings[0].values
+                
+                # Alternative format that might be used
+                if hasattr(embedding_result, "embedding"):
+                    return embedding_result.embedding.values
+                
+                logger.warning(f"Unexpected embedding result format: {embedding_result}")
+                
+            except Exception as e:
+                logger.warning(f"Embedding attempt {retries+1} failed: {e}")
+                
             retries += 1
             if retries < max_retries:
                 sleep_time = backoff_time * (2 ** retries)
@@ -78,6 +71,7 @@ class GeminiEmbedding:
         # Return empty embedding if all retries failed
         logger.warning("All embedding attempts failed, returning zeros")
         return [0.0] * 768  # Default dimension for Gemini embeddings
+
     
     def batch_get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Get embeddings for a batch of texts"""

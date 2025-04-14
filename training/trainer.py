@@ -6,11 +6,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, Optional
 from tqdm import tqdm
 import numpy as np
 import wandb
-from sklearn.metrics import accuracy_score
 
 from models.reward_model import LinearRewardModel
 from training.loss import BradleyTerryLoss

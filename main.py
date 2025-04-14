@@ -10,8 +10,6 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 
 from utils.validation import validate_environment
-from utils.logging_utils import setup_logging
-from models.nim_reward import BatchProcessingNimLlamaRewardModel
 from utils.embedding_utils import GeminiEmbedding
 from data.processors import SHPDataProcessor, create_dataloaders
 from models.reward_model import LinearRewardModel
@@ -19,6 +17,7 @@ from training.trainer import RewardModelTrainer
 from inference.predictor import RewardPredictor
 from rlhf.ppo_integration import PPOTrainerWithCustomReward
 from rlhf.dpo_integration import DPOTrainerWithCustomReward
+from models.nim_reward import NIMRewardModel
 
 # Load environment variables
 load_dotenv()
@@ -60,12 +59,14 @@ def main():
     # Load configuration
     config = load_config(args.config)
 
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
     # Validate environment first
     logger.info("Validating environment...")
     validate_environment()
     
     # Setup logging
-    logger = setup_logging()
+    logger.info("Starting Combined Reward Model")
     logger.info(f"Running in {args.mode} mode")
     
     # Set random seed
@@ -87,8 +88,7 @@ def main():
     # Initialize Gemini Embedding
     gemini_embedding = GeminiEmbedding(
         api_key=config["gemini"]["api_key"],
-        model_id=config["gemini"]["model_id"],
-        task_type=config["gemini"]["task_type"]
+        model_id=config["gemini"]["model_id"]
     )
     
     if args.mode == "train":

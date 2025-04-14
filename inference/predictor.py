@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
 
 from models.reward_model import LinearRewardModel
+from models.nim_reward import NIMRewardModel
 from utils.embedding_utils import GeminiEmbedding, cosine_similarity
 
 logger = logging.getLogger(__name__)

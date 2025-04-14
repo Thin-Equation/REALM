@@ -1,7 +1,7 @@
 # models/reward_model.py
 import torch
 import torch.nn as nn
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 class LinearRewardModel(nn.Module):
     """Linear neural network for combining Llama reward and Gemini embedding similarity"""

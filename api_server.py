@@ -1,23 +1,18 @@
 # api_server.py
-from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import torch
 import yaml
-import logging
 import time
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 
-from utils.logging_utils import setup_logging
-from models.nim_reward import BatchProcessingNimLlamaRewardModel
+from models.nim_reward import NIMRewardModel
 from utils.embedding_utils import GeminiEmbedding
-from models.reward_model import LinearRewardModel
 from inference.predictor import RewardPredictor
 
-# Setup logging
-logger = setup_logging()
 
 # Load configuration
 def load_config():
@@ -41,8 +36,7 @@ config = load_config()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Load Llama 3.1 Nemotron Reward model via NIM API
-logger.info("Initializing NIM Llama Reward model...")
-nim_reward_model = BatchProcessingNimLlamaRewardModel(
+nim_reward_model = NIMRewardModel(
     api_key=config["nim_reward"]["api_key"],
     api_url=config["nim_reward"]["api_url"],
     model_id=config["nim_reward"]["model_id"],
@@ -54,7 +48,6 @@ nim_reward_model = BatchProcessingNimLlamaRewardModel(
 )
 
 # Initialize Gemini Embedding
-logger.info("Initializing Gemini Embedding...")
 gemini_embedding = GeminiEmbedding(
     api_key=config["gemini"]["api_key"],
     model_id=config["gemini"]["model_id"],
@@ -63,7 +56,6 @@ gemini_embedding = GeminiEmbedding(
 
 # Load combined reward model
 model_path = os.environ.get("MODEL_PATH", "models/final_model.pt")
-logger.info(f"Loading combined reward model from {model_path}...")
 predictor = RewardPredictor(
     model_path=model_path,
     nim_reward_model=nim_reward_model,
@@ -172,7 +164,7 @@ async def batch_processor():
                     "rewards": rewards
                 }
             except Exception as e:
-                logger.error(f"Error processing batch {batch_id}: {str(e)}")
+                
                 batch_results[batch_id] = {
                     "status": "failed",
                     "error": str(e)
@@ -182,7 +174,7 @@ async def batch_processor():
             batch_queue.task_done()
             
         except Exception as e:
-            logger.error(f"Error in batch processor: {str(e)}")
+            
             await asyncio.sleep(1)
 
 # Start the batch processor on app startup
@@ -213,7 +205,7 @@ async def predict(request: PredictRequest, background_tasks: BackgroundTasks):
             similarity_score=similarity_score
         )
     except Exception as e:
-        logger.error(f"Error predicting reward: {str(e)}")
+        
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/batch_predict", dependencies=[Depends(check_rate_limit)])
@@ -233,7 +225,7 @@ async def batch_predict(request: BatchPredictRequest):
         return {"batch_id": batch_id, "status": "submitted", "count": len(request.prompts)}
     
     except Exception as e:
-        logger.error(f"Error submitting batch: {str(e)}")
+        
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/batch_status/{batch_id}")
@@ -255,7 +247,7 @@ async def compare(request: CompareRequest):
             better_response=better
         )
     except Exception as e:
-        logger.error(f"Error comparing responses: {str(e)}")
+        
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")

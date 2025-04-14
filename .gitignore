@@ -1,3 +1,14 @@
 /.idx
 /.vscode
 /.venv
+/cache
+/data/__pycache__
+/inference/__pycache__
+/models/__pycache__
+/rlhf/__pycache__
+/training/__pycache__
+/utils/__pycache__
+/wandb
+/models/checkpoints
+/models/final_model.pt
+/__pycache__

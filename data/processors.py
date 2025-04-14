@@ -1,14 +1,12 @@
 # data/processors.py
 import os
-import json
 import logging
 import torch
 import numpy as np
 import time
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional, Any
 from datasets import load_dataset
 from torch.utils.data import Dataset, DataLoader
-from tqdm import tqdm
 
 # Updated import for the NIM reward model
 from models.nim_reward import NIMRewardModel
@@ -202,17 +200,25 @@ class SHPRewardDataset(Dataset):
         # Use cached data if available and not rebuilding cache
         if os.path.exists(cache_path) and not self.rebuild_cache:
             try:
-                cached_data = torch.load(cache_path)
-                return cached_data
+                return torch.load(cache_path)
             except Exception as e:
                 logger.warning(f"Failed to load cached item {idx}: {str(e)}")
         
         # Process the data item
         try:
             item = self.data[idx]
-            prompt = item["post"]
-            chosen = item["preferred_comment"]
-            rejected = item["dispreferred_comment"]
+            
+            # Map SHP dataset fields correctly
+            # 'history' is the prompt (formerly 'post')
+            prompt = item["history"]
+            
+            # For preferred/dispreferred, use human_ref_A/B based on 'labels'
+            if item["labels"] == "A":
+                chosen = item["human_ref_A"]
+                rejected = item["human_ref_B"]
+            else:
+                chosen = item["human_ref_B"] 
+                rejected = item["human_ref_A"]
             
             # Truncate text if necessary
             if len(prompt) > self.max_length:
