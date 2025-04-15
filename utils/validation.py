@@ -14,8 +14,8 @@ def validate_environment():
     if not os.environ.get("NVIDIA_NIM_API_KEY"):
         checks.append("NVIDIA_NIM_API_KEY is not set in environment")
     
-    if not os.environ.get("GEMINI_API_KEY"):
-        checks.append("GEMINI_API_KEY is not set in environment")
+    # if not os.environ.get("GEMINI_API_KEY"):
+    #     checks.append("GEMINI_API_KEY is not set in environment")
     
     # Check required packages
     required_packages = {

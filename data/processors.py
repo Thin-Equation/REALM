@@ -64,7 +64,7 @@ class SHPRewardDataset(Dataset):
         self, 
         data,
         nim_reward_model: NIMRewardModel,
-        embedding_model: LajavanessEmbeddingEmbedding,
+        embedding_model: LajavanessEmbedding,
         cache_dir: str,
         max_length: int = 1024,
         rebuild_cache: bool = False,
