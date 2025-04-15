@@ -7,7 +7,7 @@ import numpy as np
 
 from models.reward_model import LinearRewardModel
 from models.nim_reward import NIMRewardModel
-from utils.embedding_utils import GeminiEmbedding, cosine_similarity
+from utils.embedding_utils import LajavanessEmbedding, cosine_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class RewardPredictor:
         self,
         model_path: str,
         nim_reward_model: NIMRewardModel,
-        gemini_embedding: GeminiEmbedding,
+        embedding_model: LajavanessEmbedding,
         device: Optional[torch.device] = None,
         cache_size: int = 1000
     ):
@@ -31,7 +31,7 @@ class RewardPredictor:
         
         # Models for feature extraction
         self.nim_reward_model = nim_reward_model
-        self.gemini_embedding = gemini_embedding
+        self.embedding_model = embedding_model
         
         # Cache for scores and embeddings
         self.llama_score_cache = {}
@@ -62,7 +62,7 @@ class RewardPredictor:
         if cache_key in self.embedding_cache:
             return self.embedding_cache[cache_key]
         
-        embedding = self.gemini_embedding.get_embedding(text)
+        embedding = self.embedding_model.get_embedding(text)
         
         # Cache the result
         if len(self.embedding_cache) >= self.cache_size:

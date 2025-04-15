@@ -10,7 +10,7 @@ import asyncio
 from typing import List, Optional
 
 from models.nim_reward import NIMRewardModel
-from utils.embedding_utils import GeminiEmbedding
+from utils.embedding_utils import LajavanessEmbedding, cosine_similarity
 from inference.predictor import RewardPredictor
 
 
@@ -47,11 +47,9 @@ nim_reward_model = NIMRewardModel(
     num_workers=config["nim_reward"]["num_workers"]
 )
 
-# Initialize Gemini Embedding
-gemini_embedding = GeminiEmbedding(
-    api_key=config["gemini"]["api_key"],
-    model_id=config["gemini"]["model_id"],
-    task_type=config["gemini"]["task_type"]
+# Initialize Lajavaness Embedding
+embedding_model = LajavanessEmbedding(
+    model_id=config["embedding"]["model_id"]
 )
 
 # Load combined reward model
@@ -59,14 +57,14 @@ model_path = os.environ.get("MODEL_PATH", "models/final_model.pt")
 predictor = RewardPredictor(
     model_path=model_path,
     nim_reward_model=nim_reward_model,
-    gemini_embedding=gemini_embedding,
+    embedding_model=embedding_model,
     device=device
 )
 
 # Create FastAPI app
 app = FastAPI(
     title="Combined Reward Model API",
-    description="API for combined Llama 3.1 Nemotron 70B Reward and Gemini Embedding reward model",
+    description="API for combined Llama 3.1 Nemotron 70B Reward and Embedding reward model",
     version="1.0.0"
 )
 
@@ -191,8 +189,8 @@ async def predict(request: PredictRequest, background_tasks: BackgroundTasks):
         llama_score = nim_reward_model.get_reward_score(request.prompt, request.response)
         
         # Get similarity score
-        prompt_embedding = gemini_embedding.get_embedding(request.prompt)
-        response_embedding = gemini_embedding.get_embedding(request.response)
+        prompt_embedding = embedding_model.get_embedding(request.prompt)
+        response_embedding = embedding_model.get_embedding(request.response)
         from utils.embedding_utils import cosine_similarity
         similarity_score = cosine_similarity(prompt_embedding, response_embedding)
         

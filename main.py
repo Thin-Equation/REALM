@@ -10,7 +10,7 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 
 from utils.validation import validate_environment
-from utils.embedding_utils import GeminiEmbedding
+from utils.embedding_utils import LajavanessEmbedding, cosine_similarity
 from data.processors import SHPDataProcessor, create_dataloaders
 from models.reward_model import LinearRewardModel
 from training.trainer import RewardModelTrainer
@@ -85,10 +85,9 @@ def main():
         retry_delay=config["nim_reward"]["retry_delay"]
     )
     
-    # Initialize Gemini Embedding
-    gemini_embedding = GeminiEmbedding(
-        api_key=config["gemini"]["api_key"],
-        model_id=config["gemini"]["model_id"]
+    # Initialize Lajavaness Embedding
+    embedding_model = LajavanessEmbedding(
+        model_id=config["embedding"]["model_id"]
     )
     
     if args.mode == "train":
@@ -98,7 +97,7 @@ def main():
         
         # Create dataloaders
         train_dataloader, val_dataloader, test_dataloader = create_dataloaders(
-            config, train_data, val_data, test_data, nim_reward_model, gemini_embedding
+            config, train_data, val_data, test_data, nim_reward_model, embedding_model
         )
         
         # Initialize model
@@ -138,7 +137,7 @@ def main():
         
         # Create test dataloader
         _, _, test_dataloader = create_dataloaders(
-            config, None, None, test_data, nim_reward_model, gemini_embedding
+            config, None, None, test_data, nim_reward_model, embedding_model
         )
         
         # Load model
@@ -169,7 +168,7 @@ def main():
         predictor = RewardPredictor(
             model_path=args.model_path,
             nim_reward_model=nim_reward_model,
-            gemini_embedding=gemini_embedding,
+            embedding_model=embedding_model,
             device=device
         )
         
@@ -186,7 +185,7 @@ def main():
         predictor = RewardPredictor(
             model_path=args.model_path,
             nim_reward_model=nim_reward_model,
-            gemini_embedding=gemini_embedding,
+            embedding_model=embedding_model,
             device=device
         )
         
@@ -227,7 +226,7 @@ def main():
         predictor = RewardPredictor(
             model_path=args.model_path,
             nim_reward_model=nim_reward_model,
-            gemini_embedding=gemini_embedding,
+            embedding_model=embedding_model,
             device=device
         )
         

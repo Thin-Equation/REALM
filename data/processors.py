@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 
 # Updated import for the NIM reward model
 from models.nim_reward import NIMRewardModel
-from utils.embedding_utils import GeminiEmbedding, cosine_similarity
+from utils.embedding_utils import LajavanessEmbedding, cosine_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class SHPRewardDataset(Dataset):
         self, 
         data,
         nim_reward_model: NIMRewardModel,
-        gemini_embedding: GeminiEmbedding,
+        embedding_model: LajavanessEmbeddingEmbedding,
         cache_dir: str,
         max_length: int = 1024,
         rebuild_cache: bool = False,
@@ -72,7 +72,7 @@ class SHPRewardDataset(Dataset):
     ):
         self.data = data
         self.nim_reward_model = nim_reward_model
-        self.gemini_embedding = gemini_embedding
+        self.embedding_model = embedding_model
         self.cache_dir = cache_dir
         self.max_length = max_length
         self.rebuild_cache = rebuild_cache
@@ -127,7 +127,7 @@ class SHPRewardDataset(Dataset):
         
         for attempt in range(max_retries):
             try:
-                embedding = self.gemini_embedding.get_embedding(text)
+                embedding = self.embedding_model.get_embedding(text)
                 
                 # Cache the embedding
                 if self.cache_embeddings:
@@ -280,7 +280,7 @@ def create_dataloaders(
     val_data,
     test_data,
     nim_reward_model: NIMRewardModel,
-    gemini_embedding: GeminiEmbedding
+    embedding_model: LajavanessEmbedding
 ) -> Tuple[Optional[DataLoader], Optional[DataLoader], Optional[DataLoader]]:
     """Create dataloaders for training, validation, and testing"""
     batch_size = config["data"]["preprocessing"]["batch_size"]
@@ -294,7 +294,7 @@ def create_dataloaders(
     if train_data is not None:
         logger.info("Creating training dataset...")
         train_dataset = SHPRewardDataset(
-            train_data, nim_reward_model, gemini_embedding, 
+            train_data, nim_reward_model, embedding_model, 
             os.path.join(cache_dir, "train"),
             max_length
         )
@@ -311,7 +311,7 @@ def create_dataloaders(
     if val_data is not None:
         logger.info("Creating validation dataset...")
         val_dataset = SHPRewardDataset(
-            val_data, nim_reward_model, gemini_embedding, 
+            val_data, nim_reward_model, embedding_model, 
             os.path.join(cache_dir, "validation"),
             max_length
         )
@@ -328,7 +328,7 @@ def create_dataloaders(
     if test_data is not None:
         logger.info("Creating test dataset...")
         test_dataset = SHPRewardDataset(
-            test_data, nim_reward_model, gemini_embedding, 
+            test_data, nim_reward_model, embedding_model, 
             os.path.join(cache_dir, "test"),
             max_length
         )
@@ -344,7 +344,7 @@ def create_dataloaders(
     
     return train_dataloader, val_dataloader, test_dataloader
 
-def safe_initialize_dataset(config, nim_reward_model, gemini_embedding):
+def safe_initialize_dataset(config, nim_reward_model, embedding_model):
     """
     Progressive initialization to avoid rate limiting and verify functionality
     """
@@ -371,7 +371,7 @@ def safe_initialize_dataset(config, nim_reward_model, gemini_embedding):
     test_dataset = SHPRewardDataset(
         test_subset, 
         nim_reward_model, 
-        gemini_embedding,
+        embedding_model,
         test_cache_dir,
         config["data"]["preprocessing"]["max_length"]
     )

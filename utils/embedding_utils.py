@@ -1,85 +1,78 @@
 # utils/embedding_utils.py
+import os
 import logging
 import numpy as np
-from typing import List
-from google import genai
-from google.genai import types
+from typing import List, Dict, Any, Optional
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-class GeminiEmbedding:
-    """Wrapper for the Google Gemini API to get embeddings"""
+class LajavanessEmbedding:
+    """Wrapper for the Lajavaness/bilingual-embedding-large model to get embeddings"""
     
-    def __init__(self, api_key: str, model_id: str, task_type: str = "retrieval_document"):
+    def __init__(self, model_id: str = "Lajavaness/bilingual-embedding-large"):
         """
-        Initialize the Gemini Embedding API client.
+        Initialize the Lajavaness Embedding model.
         
         Args:
-            api_key: Gemini API key
-            model_id: Gemini embedding model ID
-            task_type: Task type for embedding generation
+            model_id: Hugging Face model ID for the embedding model
         """
-        self.api_key = api_key
         self.model_id = model_id
-        self.task_type = task_type
         
-        # Configure Gemini API with the new client approach
-        self.client = genai.Client(api_key=self.api_key)
-        logger.info(f"Initialized Gemini Embedding with model: {model_id}")
+        # Load the model
+        try:
+            self.model = SentenceTransformer(model_id, trust_remote_code=True)
+            logger.info(f"Initialized Lajavaness Embedding model: {model_id}")
+        except Exception as e:
+            logger.error(f"Failed to load embedding model {model_id}: {str(e)}")
+            raise
     
-    # utils/embedding_utils.py
     def get_embedding(self, text: str, max_retries: int = 3) -> List[float]:
-        """Get embedding for text from Gemini Embedding model"""
+        """Get embedding for text using Lajavaness model"""
         retries = 0
-        backoff_time = 1
         
         while retries < max_retries:
             try:
-                # The correct method for google-genai >= 1.10.0
-                embedding_result = self.client.models.embed_content(
-                    model=self.model_id,
-                    contents=text,
-                    config=types.EmbedContentConfig(task_type="SEMANTIC_SIMILARITY")
-                )
+                # Get embedding directly using the model
+                embedding = self.model.encode(text)
                 
-                # Access the values correctly
-                if hasattr(embedding_result, "embeddings") and embedding_result.embeddings:
-                    # Extract the values from the first embedding
-                    return embedding_result.embeddings[0].values
-                
-                # Alternative format that might be used
-                if hasattr(embedding_result, "embedding"):
-                    return embedding_result.embedding.values
-                
-                logger.warning(f"Unexpected embedding result format: {embedding_result}")
+                # Return as list
+                return embedding.tolist() if isinstance(embedding, np.ndarray) else embedding
                 
             except Exception as e:
-                logger.warning(f"Embedding attempt {retries+1} failed: {e}")
+                logger.warning(f"Embedding attempt {retries+1} failed: {str(e)}")
+                retries += 1
                 
-            retries += 1
-            if retries < max_retries:
-                sleep_time = backoff_time * (2 ** retries)
-                logger.info(f"Retrying embedding in {sleep_time}s...")
-                import time
-                time.sleep(sleep_time)
+                if retries < max_retries:
+                    import time
+                    wait_time = 2 ** retries  # Exponential backoff
+                    logger.info(f"Retrying embedding in {wait_time}s...")
+                    time.sleep(wait_time)
         
         # Return empty embedding if all retries failed
         logger.warning("All embedding attempts failed, returning zeros")
-        return [0.0] * 768  # Default dimension for Gemini embeddings
-
+        return [0.0] * 1024  # Using 1024 as the embedding dimension for this model
     
     def batch_get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Get embeddings for a batch of texts"""
-        embeddings = []
-        for text in texts:
-            embedding = self.get_embedding(text)
-            embeddings.append(embedding)
-        return embeddings
+        try:
+            # The SentenceTransformer.encode method can handle batches efficiently
+            embeddings = self.model.encode(texts)
+            
+            # Convert to list of lists if it's a numpy array
+            if isinstance(embeddings, np.ndarray):
+                return embeddings.tolist()
+            return embeddings
+            
+        except Exception as e:
+            logger.error(f"Batch embedding failed: {str(e)}")
+            # Fall back to individual encoding
+            embeddings = []
+            for text in texts:
+                embedding = self.get_embedding(text)
+                embeddings.append(embedding)
+            return embeddings
 
 
 def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:

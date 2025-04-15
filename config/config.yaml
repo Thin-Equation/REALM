@@ -6,9 +6,8 @@ nim_reward:
   max_retries: 3
   retry_delay: 2.0
 
-gemini:
-  api_key: "${GEMINI_API_KEY}"
-  model_id: "gemini-embedding-exp-03-07"
+embedding:
+  model_id: "Lajavaness/bilingual-embedding-large"
 
 data:
   dataset_name: "stanfordnlp/SHP"
