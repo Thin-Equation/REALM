@@ -1,8 +1,7 @@
 # utils/embedding_utils.py
-import os
 import logging
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
 

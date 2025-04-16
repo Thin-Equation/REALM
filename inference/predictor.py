@@ -1,8 +1,7 @@
 # inference/predictor.py
-import os
 import torch
 import logging
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Optional
 import numpy as np
 
 from models.reward_model import LinearRewardModel

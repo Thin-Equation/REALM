@@ -10,7 +10,7 @@ import asyncio
 from typing import List, Optional
 
 from models.nim_reward import NIMRewardModel
-from utils.embedding_utils import LajavanessEmbedding, cosine_similarity
+from utils.embedding_utils import LajavanessEmbedding
 from inference.predictor import RewardPredictor
 
 
@@ -171,7 +171,7 @@ async def batch_processor():
             # Clean up old results after some time
             batch_queue.task_done()
             
-        except Exception as e:
+        except Exception:
             
             await asyncio.sleep(1)
 

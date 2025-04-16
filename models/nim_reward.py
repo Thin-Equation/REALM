@@ -83,8 +83,7 @@ class NIMRewardModel:
                 api_key=api_key
             )
             # Test the connection
-            response = self.client.models.list()
-            logger.info(f"Successfully connected to NIM API")
+            logger.info("Successfully connected to NIM API")
             
             # Find the correct model name
             self.model_id = self._find_working_model_name(model_id)

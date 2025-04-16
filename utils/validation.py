@@ -38,7 +38,8 @@ def validate_environment():
             logger.info(f"✓ CUDA is available: {device_name}")
         else:
             logger.warning("! CUDA is not available, using CPU (this will be slow)")
-    except:
+    except Exception as e:
+        checks.append(f"✗ Error checking CUDA availability: {e}")
         logger.warning("! Could not check CUDA availability")
     
     # Check for cache directory write permissions
@@ -49,7 +50,7 @@ def validate_environment():
         with open(test_file, "w") as f:
             f.write("test")
         os.remove(test_file)
-        logger.info(f"✓ Cache directory is writable")
+        logger.info("✓ Cache directory is writable")
     except Exception as e:
         checks.append(f"✗ Cannot write to cache directory: {e}")
     
