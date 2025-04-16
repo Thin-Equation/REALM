@@ -10,7 +10,7 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 
 from utils.validation import validate_environment
-from utils.embedding_utils import LajavanessEmbedding, cosine_similarity
+from utils.embedding_utils import LajavanessEmbedding
 from data.processors import SHPDataProcessor, create_dataloaders
 from models.reward_model import LinearRewardModel
 from training.trainer import RewardModelTrainer

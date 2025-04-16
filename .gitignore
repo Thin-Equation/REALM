@@ -12,3 +12,5 @@
 /models/checkpoints
 /models/final_model.pt
 /__pycache__
+/.pdm-build
+/uv.lock
