@@ -1,4 +1,6 @@
+# combination of linear reward model and Lajavaness embedding
 # inference/predictor.py
+# this script is only used after we combine the linear reward model with the Lajavaness embedding
 import torch
 import logging
 from typing import Optional

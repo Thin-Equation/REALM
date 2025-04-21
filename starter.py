@@ -1,4 +1,7 @@
 # starter.py
+# better than main this has validation as well
+# used to run the main.py
+
 import os
 import logging
 import argparse

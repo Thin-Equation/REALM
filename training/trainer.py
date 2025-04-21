@@ -1,4 +1,5 @@
 # training/trainer.py
+# helping to train the linear nn reward model
 import os
 import logging
 import torch

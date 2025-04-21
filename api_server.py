@@ -1,4 +1,5 @@
 # api_server.py
+# used if we need to host the reward model -> post training the linear nn reward model
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel

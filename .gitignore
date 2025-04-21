@@ -15,3 +15,7 @@
 /.pdm-build
 /uv.lock
 /.ruff_cache
+/cache
+/realmVenv
+/__pycache__/*
+/.ruff_cache

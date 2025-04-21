@@ -1,3 +1,4 @@
+# using the nvidia APIs with rate limits 
 # models/nim_reward.py
 import time
 import logging
@@ -78,10 +79,22 @@ class NIMRewardModel:
         
         # Try to initialize the client with better error handling
         try:
+            # Impo rt httpx to create a custom client without proxy settings
+            import httpx
+            
+            # Create a custom HTTP client with explicit timeout and no proxies
+            custom_http_client = httpx.Client(
+                timeout=60.0,  # Set an appropriate timeout
+                follow_redirects=True
+            )
+            
+            # Initialize the OpenAI client with the custom HTTP client
             self.client = OpenAI(
                 base_url=base_url,
-                api_key=api_key
+                api_key=api_key,
+                http_client=custom_http_client
             )
+                
             # Test the connection
             logger.info("Successfully connected to NIM API")
             
