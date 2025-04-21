@@ -8,6 +8,7 @@ import yaml
 import torch
 import random
 import numpy as np
+import time
 from typing import Dict, Any
 from dotenv import load_dotenv
 
@@ -47,11 +48,98 @@ def set_seed(seed: int) -> None:
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
+def create_static_test_dataset():
+    """Create a small static dataset for testing that exactly matches the Stanford Human Preferences (SHP) dataset structure"""
+    # Define a very small dataset with exactly the same field names as the SHP dataset
+    test_data = {
+        "train": {
+            "post": [  # This is 'prompt' in SHP terminology
+                "Explain the concept of reinforcement learning.",
+                "What is the capital of France?",
+                "How do neural networks learn?",
+                "Write a short poem about AI.",
+                "Summarize the history of machine learning."
+            ],
+            "preferred_comment": [  # This is 'chosen' in SHP terminology
+                "Reinforcement learning is a training method based on rewarding desired behaviors and punishing undesired ones. It's different from supervised learning because the system learns from its experiences rather than from a training dataset.",
+                "The capital of France is Paris, which is also its largest city and a global center for art, fashion, gastronomy, and culture.",
+                "Neural networks learn by adjusting weights between neurons through backpropagation, minimizing the difference between predicted and actual outputs using gradient descent algorithms.",
+                "Silicon thoughts in digital streams,\nLearning patterns, chasing dreams.\nArtificial yet so real,\nProcessing more than humans feel.",
+                "Machine learning evolved from pattern recognition to deep learning: 1950s perceptrons, 1980s backpropagation, 2010s deep neural networks, and today's transformer models, each advance expanding AI capabilities."
+            ],
+            "dispreferred_comment": [  # This is 'rejected' in SHP terminology
+                "Reinforcement learning is when a computer plays games to get better at stuff.",
+                "I think the capital of France is Lyon or maybe Marseille.",
+                "Neural networks learn by magic and nobody really understands them.",
+                "Robots are cool\nAI rules the school\nHumans drool",
+                "Machine learning started with computers and then got better over time with more algorithms and stuff."
+            ],
+            # Custom fields for additional metadata used by our models
+            "llama_scores": [
+                0.85, 0.92, 0.78, 0.80, 0.88
+            ],
+            "chosen_similarity": [
+                0.72, 0.95, 0.68, 0.79, 0.81
+            ],
+            "rejected_similarity": [
+                0.45, 0.60, 0.30, 0.52, 0.48
+            ]
+        },
+        "validation": {
+            "post": [
+                "Describe quantum computing in simple terms.",
+                "What are the benefits of regular exercise?"
+            ],
+            "preferred_comment": [
+                "Quantum computing uses quantum bits or qubits that can exist in multiple states simultaneously, unlike classical bits which can only be 0 or 1. This allows quantum computers to process certain types of problems much faster.",
+                "Regular exercise improves cardiovascular health, builds muscle strength, enhances mood through endorphin release, helps maintain healthy weight, reduces disease risk, and improves sleep quality and cognitive function."
+            ],
+            "dispreferred_comment": [
+                "Quantum computing is very complicated and involves particles and physics that are impossible to understand without advanced degrees.",
+                "Exercise is good for you because it makes you less fat and more healthy. You should do it a lot."
+            ],
+            "llama_scores": [
+                0.82, 0.89
+            ],
+            "chosen_similarity": [
+                0.76, 0.85
+            ],
+            "rejected_similarity": [
+                0.42, 0.55
+            ]
+        },
+        "test": {
+            "post": [
+                "How does photosynthesis work?",
+                "Give some tips for learning a new language."
+            ],
+            "preferred_comment": [
+                "Photosynthesis is the process where plants convert sunlight, water, and carbon dioxide into glucose and oxygen. The chlorophyll in plant cells captures light energy, which is used to convert CO2 and water into glucose, releasing oxygen as a byproduct.",
+                "To learn a new language effectively: practice daily, use spaced repetition for vocabulary, immerse yourself through media, find conversation partners, focus on common words first, use language learning apps, and don't be afraid to make mistakes."
+            ],
+            "dispreferred_comment": [
+                "Plants make food using sunlight. They take in water and air and turn it into energy.",
+                "Just download Duolingo and use it every day. Also maybe watch some foreign movies."
+            ],
+            "llama_scores": [
+                0.91, 0.87
+            ],
+            "chosen_similarity": [
+                0.82, 0.78
+            ],
+            "rejected_similarity": [
+                0.58, 0.51
+            ]
+        }
+    }
+    
+    return test_data
+
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Combined Reward Model for RLHF")
     parser.add_argument("--config", type=str, default="config/config.yaml", help="Path to configuration file")
-    parser.add_argument("--mode", type=str, choices=["train", "eval", "ppo", "dpo", "predict"], default="train", help="Mode to run")
+    parser.add_argument("--mode", type=str, choices=["train", "eval", "ppo", "dpo", "predict", "test"], default="train", help="Mode to run")
     parser.add_argument("--model_path", type=str, default=None, help="Path to model checkpoint (required for eval, ppo, dpo, predict)")
     parser.add_argument("--prompt", type=str, default=None, help="Prompt for prediction (used in predict mode)")
     parser.add_argument("--response", type=str, default=None, help="Response for prediction (used in predict mode)")
@@ -92,7 +180,127 @@ def main():
         model_id=config["embedding"]["model_id"]
     )
     
-    if args.mode == "train":
+    if args.mode == "test":
+        # Use the static dataset for testing (already in SHP format)
+        logger.info("Using static test dataset")
+        dataset = create_static_test_dataset()
+        
+        # Use the dataset splits directly (already in SHP format with correct field names)
+        train_data = dataset["train"]
+        val_data = dataset["validation"]
+        test_data = dataset["test"]
+        
+        # Log the dataset structure
+        logger.info(f"Test dataset created with {len(train_data['post'])} training examples, "
+                   f"{len(val_data['post'])} validation examples, and {len(test_data['post'])} test examples")
+        
+        # Create a test-specific config with the necessary structure
+        data_config = config.get("data", {})
+        if "preprocessing" not in data_config:
+            data_config["preprocessing"] = {}
+            
+        # Set default values for required preprocessing parameters
+        if "batch_size" not in data_config.get("preprocessing", {}):
+            data_config["preprocessing"]["batch_size"] = 4  # Default batch size
+        if "num_workers" not in data_config.get("preprocessing", {}):
+            data_config["preprocessing"]["num_workers"] = 0  # Default num_workers
+        if "cache_dir" not in data_config.get("preprocessing", {}):
+            data_config["preprocessing"]["cache_dir"] = "cache"  # Default cache directory
+        if "max_length" not in data_config.get("preprocessing", {}):
+            data_config["preprocessing"]["max_length"] = 512  # Default max length
+            
+        # Ensure the config has the data key properly set
+        config["data"] = data_config
+        
+        # Create dataloaders from the static dataset
+        train_dataloader, val_dataloader, test_dataloader = create_dataloaders(
+            config=config,
+            train_data=train_data, 
+            val_data=val_data, 
+            test_data=test_data,
+            nim_reward_model=nim_reward_model,
+            embedding_model=embedding_model
+        )
+        
+        # Initialize and train the model with the small dataset using robust defaults
+        model_config = config.get("model", {})
+        model = LinearRewardModel(
+            input_dim=model_config.get("input_dim", 2),  # Default input dimension is 2 (llama score + similarity)
+            hidden_dims=model_config.get("hidden_dims", [64, 32]),  # Default hidden dimensions
+            dropout=model_config.get("dropout", 0.1)  # Default dropout rate
+        ).to(device)
+        
+        # Create a default training config if missing
+        training_config = config.get("training", {})
+        
+        # Add wandb settings with defaults
+        if "use_wandb" not in training_config:
+            training_config["use_wandb"] = False  # Default to not using wandb for test mode
+        
+        # Add early stopping settings if missing
+        if "early_stopping_patience" not in training_config:
+            training_config["early_stopping_patience"] = 5  # Default early stopping patience
+        
+        # Add logging steps if missing
+        if "logging_steps" not in training_config:
+            training_config["logging_steps"] = 10  # Default logging steps
+        
+        # Add evaluation steps if missing
+        if "evaluation_steps" not in training_config:
+            training_config["evaluation_steps"] = 5  # Evaluate every 5 steps
+            
+        # Add save steps if missing
+        if "save_steps" not in training_config:
+            training_config["save_steps"] = 10  # Save every 10 steps
+            
+        # Add max gradient norm if missing
+        if "max_grad_norm" not in training_config:
+            training_config["max_grad_norm"] = 1.0  # Default max gradient norm
+        
+        # Add num_epochs if missing
+        if "num_epochs" not in training_config:
+            training_config["num_epochs"] = 3  # Default epochs
+            
+        # Limit to max 3 epochs for testing to avoid long training times
+        training_config["num_epochs"] = min(training_config["num_epochs"], 3)
+        
+        # Create wandb config with defaults
+        wandb_config = {
+            "project": "realm-test",
+            "entity": "test-user",
+            "name": f"test-run-{int(time.time())}"
+        }
+        
+        # Create optimizer config with defaults if missing
+        optimizer_config = {
+            "lr": training_config.get("learning_rate", 1e-4),
+            "weight_decay": training_config.get("weight_decay", 0.01)
+        }
+        
+        # Create a complete config with all required sections
+        complete_config = {
+            "training": training_config,
+            "optimizer": optimizer_config,
+            "wandb": wandb_config  # Add wandb config section
+        }
+        
+        trainer = RewardModelTrainer(
+            model=model,
+            config=complete_config,
+            train_dataloader=train_dataloader,
+            val_dataloader=val_dataloader,
+            device=device
+        )
+        
+        # Call train without parameters - it will use the config values
+        trainer.train()
+        
+        # Save the final model (using the model's save method, not the trainer)
+        output_path = os.path.join("models", "test_model.pt")
+        trainer.model.save(output_path)
+        logger.info(f"Test model saved to {output_path}")
+        
+    elif args.mode == "train":
         # Load and process dataset
         data_processor = SHPDataProcessor(config)
         train_data, val_data, test_data = data_processor.load_dataset()
@@ -204,10 +412,10 @@ def main():
             with open(args.dataset_path, "r") as f:
                 dataset = json.load(f)
         else:
-            # Use SHP dataset for demonstration
-            data_processor = SHPDataProcessor(config)
-            train_data, _, _ = data_processor.load_dataset()
-            dataset = {"prompt": [item["post"] for item in train_data]}
+            # Use our static test dataset for demonstration
+            logger.info("Using static test dataset for PPO training")
+            test_data = create_static_test_dataset()
+            dataset = {"prompt": test_data["train"]["post"]}
         
         # Train with PPO
         ppo_trainer.train(

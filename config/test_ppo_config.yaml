@@ -1,0 +1,61 @@
+# config/test_ppo_config.yaml
+# This is a test configuration for PPO training with publicly available models
+nim_reward:
+  api_key: "${NVIDIA_NIM_API_KEY}"
+  base_url: "https://integrate.api.nvidia.com/v1"
+  model_id: "nvidia/llama-3.1-nemotron-70b-reward"
+  max_retries: 3
+  retry_delay: 2.0
+
+embedding:
+  model_id: "Lajavaness/bilingual-embedding-large"
+
+data:
+  dataset_name: "stanfordnlp/SHP"
+  preprocessing:
+    max_length: 512  # Reduced for faster processing
+    batch_size: 4    # Smaller batch size for testing
+    num_workers: 0
+    cache_dir: "./cache"
+
+model:
+  input_dim: 2
+  hidden_dims: [64, 32]
+  output_dim: 1
+  dropout: 0.1
+
+training:
+  seed: 42
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  num_epochs: 3      # Reduced for testing
+  warmup_steps: 10
+  gradient_accumulation_steps: 1
+  evaluation_steps: 50
+  save_steps: 100
+  logging_steps: 10
+  max_grad_norm: 1.0
+  use_wandb: false   # Disable wandb for testing
+  early_stopping_patience: 3
+
+wandb:
+  project: "realm-test-ppo"
+  entity: "test-user"
+  name: "test-ppo-run"
+
+rlhf:
+  ppo:
+    model_name: "facebook/opt-125m"  # Using a publicly available model
+    batch_size: 4
+    mini_batch_size: 1
+    gradient_accumulation_steps: 1
+    learning_rate: 1e-5
+    max_length: 256   # Reduced for testing
+    kl_penalty: 0.2
+  
+  dpo:
+    model_name: "facebook/opt-125m"  # Using a publicly available model
+    learning_rate: 5e-7
+    batch_size: 2
+    gradient_accumulation_steps: 1
+    beta: 0.1
