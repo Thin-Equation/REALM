@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 import numpy as np
 
-from models.reward_model import LinearRewardModel
+from models.linear_reward_model import LinearRewardModel
 from models.nim_reward import NIMRewardModel
 from utils.embedding_utils import LajavanessEmbedding, cosine_similarity
 

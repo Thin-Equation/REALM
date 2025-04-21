@@ -10,7 +10,7 @@ from tqdm import tqdm
 import numpy as np
 import wandb
 
-from models.reward_model import LinearRewardModel
+from models.linear_reward_model import LinearRewardModel
 from training.loss import BradleyTerryLoss
 
 logger = logging.getLogger(__name__)

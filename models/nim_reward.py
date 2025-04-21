@@ -1,5 +1,5 @@
 # using the nvidia APIs with rate limits 
-# models/nim_reward.py
+# models/nim_reward.py -> gets the rewards scores
 import time
 import logging
 import threading
@@ -79,7 +79,7 @@ class NIMRewardModel:
         
         # Try to initialize the client with better error handling
         try:
-            # Impo rt httpx to create a custom client without proxy settings
+            # Import httpx to create a custom client without proxy settings
             import httpx
             
             # Create a custom HTTP client with explicit timeout and no proxies

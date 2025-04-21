@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from utils.validation import validate_environment
 from utils.embedding_utils import LajavanessEmbedding
 from data.processors import SHPDataProcessor, create_dataloaders
-from models.reward_model import LinearRewardModel
+from models.linear_reward_model import LinearRewardModel
 from training.trainer import RewardModelTrainer
 from inference.predictor import RewardPredictor
 from rlhf.ppo_integration import PPOTrainerWithCustomReward

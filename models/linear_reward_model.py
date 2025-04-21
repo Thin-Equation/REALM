@@ -1,4 +1,4 @@
-# models/reward_model.py
+# models/linear_reward_model.py
 # linear nn -> combining the embedding score and reward score from nim reward model
 
 import torch

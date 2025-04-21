@@ -1,4 +1,5 @@
 # utils/embedding_utils.py
+# attempt to get the best SOTA embeddings
 import logging
 import numpy as np
 from typing import List
