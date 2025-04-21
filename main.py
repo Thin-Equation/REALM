@@ -18,8 +18,10 @@ from data.processors import SHPDataProcessor, create_dataloaders
 from models.linear_reward_model import LinearRewardModel
 from training.trainer import RewardModelTrainer
 from inference.predictor import RewardPredictor
-from rlhf.ppo_integration import PPOTrainerWithCustomReward
-from rlhf.dpo_integration import DPOTrainerWithCustomReward
+from rlhf.ppo_huggingface import HuggingFacePPOTrainer
+from rlhf.ppo_integration import PPOTrainerWithCustomReward  # Keep for backward compatibility
+from rlhf.dpo_huggingface import HuggingFaceDPOTrainer
+from rlhf.dpo_integration import DPOTrainerWithCustomReward  # Keep for backward compatibility
 from models.nim_reward import NIMRewardModel
 
 # Load environment variables
@@ -399,8 +401,9 @@ def main():
             device=device
         )
         
-        # Initialize PPO trainer
-        ppo_trainer = PPOTrainerWithCustomReward(
+        # Use Hugging Face's PPO Trainer implementation
+        logger.info("Using HuggingFace's PPO implementation")
+        ppo_trainer = HuggingFacePPOTrainer(
             config=config,
             reward_predictor=predictor,
             device=device
@@ -420,8 +423,8 @@ def main():
         # Train with PPO
         ppo_trainer.train(
             dataset=dataset,
-            num_epochs=1,
-            max_steps=100  # Limit steps for demonstration
+            num_epochs=config["rlhf"]["ppo"].get("num_epochs", 1),
+            max_steps=config["rlhf"]["ppo"].get("max_steps", 100)
         )
         
         # Save the fine-tuned model
@@ -440,11 +443,17 @@ def main():
             device=device
         )
         
-        # Initialize DPO trainer
-        dpo_trainer = DPOTrainerWithCustomReward(
+        # Use Hugging Face's DPO Trainer implementation
+        logger.info("Using HuggingFace's DPO implementation")
+        
+        # Check for PEFT/LoRA flag
+        use_peft = config["rlhf"]["dpo"].get("use_peft", False)
+        
+        dpo_trainer = HuggingFaceDPOTrainer(
             config=config,
             reward_predictor=predictor,
-            device=device
+            device=device,
+            use_peft=use_peft
         )
         
         # Load dataset
@@ -453,23 +462,42 @@ def main():
             with open(args.dataset_path, "r") as f:
                 dataset = json.load(f)
             
+            # Get num_epochs from config
+            num_epochs = config["rlhf"]["dpo"].get("num_epochs", 3)
+            
             dpo_trainer.train(
                 dataset=dataset,
-                num_epochs=3,
+                num_epochs=num_epochs,
                 generate_pairs=True
             )
         else:
-            # Use SHP dataset for demonstration
-            data_processor = SHPDataProcessor(config)
-            train_data, _, _ = data_processor.load_dataset()
+            # Use our static test dataset for demonstration
+            logger.info("Using static test dataset for DPO training")
+            test_data = create_static_test_dataset()
             
-            # Convert to format expected by DPO trainer
-            dataset = {"prompt": [item["post"] for item in train_data]}
+            # Convert static dataset to the format expected by DPO trainer
+            # Create paired dataset directly with prompt, chosen, and rejected responses
+            paired_dataset = [
+                {
+                    "prompt": prompt,
+                    "chosen": chosen,
+                    "rejected": rejected
+                }
+                for prompt, chosen, rejected in zip(
+                    test_data["train"]["post"],
+                    test_data["train"]["preferred_comment"],
+                    test_data["train"]["dispreferred_comment"]
+                )
+            ]
             
+            # Get num_epochs from config
+            num_epochs = config["rlhf"]["dpo"].get("num_epochs", 3)
+            
+            # Train with paired dataset
             dpo_trainer.train(
-                dataset=dataset,
-                num_epochs=3,
-                generate_pairs=True
+                paired_dataset=paired_dataset,
+                num_epochs=num_epochs,
+                generate_pairs=False  # We already provided the pairs
             )
 
 if __name__ == "__main__":

@@ -52,10 +52,38 @@ rlhf:
     learning_rate: 1e-5
     max_length: 256   # Reduced for testing
     kl_penalty: 0.2
+    early_stopping: true
+    target_kl: 0.1
+    score_clip: 10.0
+    num_epochs: 1
+    max_steps: 100
+    use_score_scaling: true
+    use_score_norm: true
   
   dpo:
     model_name: "facebook/opt-125m"  # Using a publicly available model
     learning_rate: 5e-7
     batch_size: 2
     gradient_accumulation_steps: 1
-    beta: 0.1
+    beta: 0.1  # Controls the KL penalty term in DPO loss function
+    num_epochs: 3
+    max_length: 512
+    max_prompt_length: 256
+    max_target_length: 256
+    generation_batch_size: 4
+    val_split: 0.05
+    eval_steps: 500
+    save_steps: 1000
+    logging_steps: 100
+    warmup_steps: 100
+    weight_decay: 0.01
+    max_grad_norm: 1.0
+    use_peft: false  # Set to true to use parameter-efficient fine-tuning
+    # PEFT/LoRA parameters (only used if use_peft is true)
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.05
+    save_merged_model: false  # Set to true to save the merged model (only for PEFT)
+    # Optional quantization (for larger models)
+    use_4bit: false
+    use_8bit: false
