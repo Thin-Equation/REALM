@@ -20,3 +20,14 @@
 /__pycache__/*
 /.ruff_cache
 /wandb
+
+# DPO output checkpoints
+/dpo_output/checkpoint-*/
+
+# Model files
+/models/dpo_finetuned/
+/models/ppo_finetuned/
+/models/test_model.pt
+
+# TensorBoard logs
+/runs/
