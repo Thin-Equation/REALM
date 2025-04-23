@@ -53,8 +53,7 @@ class RewardModelTrainer:
             self.optimizer,
             mode="min",
             factor=0.5,
-            patience=2,
-            verbose=True
+            patience=2
         )
         
         # Early stopping

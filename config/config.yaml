@@ -34,7 +34,7 @@ training:
   save_steps: 1000
   logging_steps: 50
   max_grad_norm: 1.0
-  use_wandb: true
+  use_wandb: false
   early_stopping_patience: 3
 
 wandb:
