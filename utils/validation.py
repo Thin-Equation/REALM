@@ -6,12 +6,16 @@ import torch
 
 logger = logging.getLogger(__name__)
 
-def validate_environment():
-    """Validate environment and dependencies before running"""
+def validate_environment(skip_api_check=False):
+    """Validate environment and dependencies before running
+    
+    Args:
+        skip_api_check: If True, skips checking for API keys (useful for test mode)
+    """
     checks = []
     
-    # Check API keys
-    if not os.environ.get("NVIDIA_NIM_API_KEY"):
+    # Check API keys (optional)
+    if not skip_api_check and not os.environ.get("NVIDIA_NIM_API_KEY"):
         checks.append("NVIDIA_NIM_API_KEY is not set in environment")
     
     # Check required packages

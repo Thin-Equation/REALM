@@ -196,7 +196,13 @@ def main():
     logger = logging.getLogger(__name__)
     # Validate environment first
     logger.info("Validating environment...")
-    validate_environment()
+    
+    # Skip API check if we're in test mode
+    if args.mode == "test":
+        logger.info("In test mode - skipping API key validation")
+        validate_environment(skip_api_check=True)
+    else:
+        validate_environment()
     
     # Setup logging
     logger.info("Starting Combined Reward Model")
@@ -209,19 +215,46 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
     
-    # Initialize Llama 3.1 Nemotron Reward model via NIM API
-    nim_reward_model = NIMRewardModel(
-        api_key=config["nim_reward"]["api_key"],
-        base_url=config["nim_reward"]["base_url"],
-        model_id=config["nim_reward"]["model_id"],
-        max_retries=config["nim_reward"]["max_retries"],
-        retry_delay=config["nim_reward"]["retry_delay"]
-    )
-    
-    # Initialize Lajavaness Embedding
-    embedding_model = LajavanessEmbedding(
-        model_id=config["embedding"]["model_id"]
-    )
+    if args.mode == "test":
+        # In test mode, create mock objects instead of real API calls
+        logger.info("Creating mock NIMRewardModel and LajavanessEmbedding for test mode")
+        
+        # Create a mock NIMRewardModel class
+        class MockNIMRewardModel:
+            def __init__(self, **kwargs):
+                logger.info("Initialized mock NIMRewardModel")
+                
+            def get_reward_score(self, prompt, response):
+                # Return a random score between 0 and 1 for testing
+                return random.random()
+        
+        # Create a mock LajavanessEmbedding class
+        class MockLajavanessEmbedding:
+            def __init__(self, **kwargs):
+                logger.info("Initialized mock LajavanessEmbedding")
+                
+            def get_embedding(self, text):
+                # Return a random embedding vector (10 dimensions) as a LIST for testing
+                # Using a list instead of np.array to avoid boolean context errors
+                return [random.random() for _ in range(10)]
+        
+        # Use the mock classes
+        nim_reward_model = MockNIMRewardModel()
+        embedding_model = MockLajavanessEmbedding()
+    else:
+        # Initialize Llama 3.1 Nemotron Reward model via NIM API
+        nim_reward_model = NIMRewardModel(
+            api_key=config["nim_reward"]["api_key"],
+            base_url=config["nim_reward"]["base_url"],
+            model_id=config["nim_reward"]["model_id"],
+            max_retries=config["nim_reward"]["max_retries"],
+            retry_delay=config["nim_reward"]["retry_delay"]
+        )
+        
+        # Initialize Lajavaness Embedding
+        embedding_model = LajavanessEmbedding(
+            model_id=config["embedding"]["model_id"]
+        )
     
     if args.mode == "test":
         # Use the static dataset for testing (already in SHP format)
@@ -234,8 +267,8 @@ def main():
         test_data = dataset["test"]
         
         # Log the dataset structure
-        logger.info(f"Test dataset created with {len(train_data['post'])} training examples, "
-                   f"{len(val_data['post'])} validation examples, and {len(test_data['post'])} test examples")
+        logger.info(f"Test dataset created with {len(train_data)} training examples, "
+                   f"{len(val_data)} validation examples, and {len(test_data)} test examples")
         
         # Create a test-specific config with the necessary structure
         data_config = config.get("data", {})
@@ -518,18 +551,23 @@ def main():
             
             # Convert static dataset to the format expected by DPO trainer
             # Create paired dataset directly with prompt, chosen, and rejected responses
-            paired_dataset = [
-                {
+            paired_dataset = []
+            for sample in test_data:
+                # Extract data from each sample in our SHP-formatted test data
+                # 'history' is the prompt, and we use human_ref_A/B based on the 'labels' field
+                prompt = sample["history"]
+                if sample["labels"] == 1:  # 1 means human_ref_A is preferred
+                    chosen = sample["human_ref_A"]
+                    rejected = sample["human_ref_B"]
+                else:  # 0 means human_ref_B is preferred
+                    chosen = sample["human_ref_B"]
+                    rejected = sample["human_ref_A"]
+                
+                paired_dataset.append({
                     "prompt": prompt,
                     "chosen": chosen,
                     "rejected": rejected
-                }
-                for prompt, chosen, rejected in zip(
-                    test_data["train"]["post"],
-                    test_data["train"]["preferred_comment"],
-                    test_data["train"]["dispreferred_comment"]
-                )
-            ]
+                })
             
             # Get num_epochs from config
             num_epochs = config["rlhf"]["dpo"].get("num_epochs", 3)
