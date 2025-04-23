@@ -2,8 +2,7 @@
 import os
 import torch
 import logging
-from typing import Dict, List, Optional, Tuple, Union
-from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
 # Hugging Face's TRL library for DPO implementation
 from trl import DPOTrainer

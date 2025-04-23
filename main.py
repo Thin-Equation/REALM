@@ -9,7 +9,7 @@ import numpy as np
 import json # Added for JSON serialization
 import matplotlib.pyplot as plt # Added for plotting
 import sys
-from typing import Dict, Any, List, Optional # Added List and Optional for typing
+from typing import Dict, Any, Optional # Added List and Optional for typing
 from dotenv import load_dotenv
 from tqdm import tqdm # Added for progress bars
 
@@ -24,7 +24,6 @@ from training.trainer import RewardModelTrainer
 from inference.predictor import RewardPredictor, NIMRewardAdapter
 from rlhf.ppo_integration import HuggingFacePPOTrainer
 from models.nim_reward import NIMRewardModel
-from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer # Added for loading models and tokenizers
 
 # Load environment variables first thing
