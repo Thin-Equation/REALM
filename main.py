@@ -53,86 +53,127 @@ def set_seed(seed: int) -> None:
 def create_static_test_dataset():
     """Create a small static dataset for testing that exactly matches the Stanford Human Preferences (SHP) dataset structure"""
     # Define a very small dataset with exactly the same field names as the SHP dataset
-    test_data = {
-        "train": {
-            "post": [  # This is 'prompt' in SHP terminology
+    # Structure based on stanfordnlp/SHP from Hugging Face
+    
+    # Build the samples with matching SHP structure
+    train_samples = []
+    for i in range(5):
+        # Create sample with exact data types matching SHP dataset
+        score_a = 300 + i*10  # BIGINT
+        score_b = 150 + i*5   # BIGINT
+        
+        sample = {
+            "post_id": f"test{i+1}",                # VARCHAR
+            "domain": f"test_train",               # VARCHAR
+            "upvote_ratio": 0.98,                  # DOUBLE
+            "history": [
                 "Explain the concept of reinforcement learning.",
                 "What is the capital of France?",
                 "How do neural networks learn?",
                 "Write a short poem about AI.",
                 "Summarize the history of machine learning."
-            ],
-            "preferred_comment": [  # This is 'chosen' in SHP terminology
+            ][i],                                  # VARCHAR
+            "c_root_id_A": f"comment_a_{i+1}",     # VARCHAR
+            "c_root_id_B": f"comment_b_{i+1}",     # VARCHAR
+            "created_at_utc_A": int(time.time()) - 100,  # BIGINT
+            "created_at_utc_B": int(time.time()) - 200,  # BIGINT
+            "score_A": score_a,                    # BIGINT
+            "score_B": score_b,                    # BIGINT
+            "human_ref_A": [
                 "Reinforcement learning is a training method based on rewarding desired behaviors and punishing undesired ones. It's different from supervised learning because the system learns from its experiences rather than from a training dataset.",
                 "The capital of France is Paris, which is also its largest city and a global center for art, fashion, gastronomy, and culture.",
                 "Neural networks learn by adjusting weights between neurons through backpropagation, minimizing the difference between predicted and actual outputs using gradient descent algorithms.",
                 "Silicon thoughts in digital streams,\nLearning patterns, chasing dreams.\nArtificial yet so real,\nProcessing more than humans feel.",
                 "Machine learning evolved from pattern recognition to deep learning: 1950s perceptrons, 1980s backpropagation, 2010s deep neural networks, and today's transformer models, each advance expanding AI capabilities."
-            ],
-            "dispreferred_comment": [  # This is 'rejected' in SHP terminology
+            ][i],                                  # VARCHAR
+            "human_ref_B": [
                 "Reinforcement learning is when a computer plays games to get better at stuff.",
                 "I think the capital of France is Lyon or maybe Marseille.",
                 "Neural networks learn by magic and nobody really understands them.",
                 "Robots are cool\nAI rules the school\nHumans drool",
                 "Machine learning started with computers and then got better over time with more algorithms and stuff."
-            ],
-            # Custom fields for additional metadata used by our models
-            "llama_scores": [
-                0.85, 0.92, 0.78, 0.80, 0.88
-            ],
-            "chosen_similarity": [
-                0.72, 0.95, 0.68, 0.79, 0.81
-            ],
-            "rejected_similarity": [
-                0.45, 0.60, 0.30, 0.52, 0.48
-            ]
-        },
-        "validation": {
-            "post": [
+            ][i],                                  # VARCHAR
+            "labels": 1,                           # BIGINT - 1 means A is preferred (human_ref_A)
+            "seconds_difference": 100.0,           # DOUBLE
+            "score_ratio": float(score_a) / float(score_b)  # DOUBLE - explicit float conversion
+        }
+        train_samples.append(sample)
+    
+    # Create validation samples
+    val_samples = []
+    for i in range(2):
+        # Create sample with exact data types matching SHP dataset
+        score_a = 280 + i*10  # BIGINT
+        score_b = 140 + i*5   # BIGINT
+        
+        sample = {
+            "post_id": f"val{i+1}",                # VARCHAR
+            "domain": f"test_validation",         # VARCHAR
+            "upvote_ratio": 0.95,                 # DOUBLE
+            "history": [
                 "Describe quantum computing in simple terms.",
                 "What are the benefits of regular exercise?"
-            ],
-            "preferred_comment": [
+            ][i],                                 # VARCHAR
+            "c_root_id_A": f"val_comment_a_{i+1}", # VARCHAR
+            "c_root_id_B": f"val_comment_b_{i+1}", # VARCHAR
+            "created_at_utc_A": int(time.time()) - 150, # BIGINT
+            "created_at_utc_B": int(time.time()) - 250, # BIGINT
+            "score_A": score_a,                   # BIGINT
+            "score_B": score_b,                   # BIGINT
+            "human_ref_A": [
                 "Quantum computing uses quantum bits or qubits that can exist in multiple states simultaneously, unlike classical bits which can only be 0 or 1. This allows quantum computers to process certain types of problems much faster.",
                 "Regular exercise improves cardiovascular health, builds muscle strength, enhances mood through endorphin release, helps maintain healthy weight, reduces disease risk, and improves sleep quality and cognitive function."
-            ],
-            "dispreferred_comment": [
+            ][i],                                 # VARCHAR
+            "human_ref_B": [
                 "Quantum computing is very complicated and involves particles and physics that are impossible to understand without advanced degrees.",
                 "Exercise is good for you because it makes you less fat and more healthy. You should do it a lot."
-            ],
-            "llama_scores": [
-                0.82, 0.89
-            ],
-            "chosen_similarity": [
-                0.76, 0.85
-            ],
-            "rejected_similarity": [
-                0.42, 0.55
-            ]
-        },
-        "test": {
-            "post": [
+            ][i],                                 # VARCHAR
+            "labels": 1,                          # BIGINT - 1 means A is preferred
+            "seconds_difference": 100.0,          # DOUBLE
+            "score_ratio": float(score_a) / float(score_b) # DOUBLE
+        }
+        val_samples.append(sample)
+    
+    # Create test samples
+    test_samples = []
+    for i in range(2):
+        # Create sample with exact data types matching SHP dataset
+        score_a = 320 + i*10  # BIGINT
+        score_b = 160 + i*5   # BIGINT
+        
+        sample = {
+            "post_id": f"test{i+1}",                # VARCHAR
+            "domain": f"test_test",                # VARCHAR
+            "upvote_ratio": 0.97,                  # DOUBLE
+            "history": [
                 "How does photosynthesis work?",
                 "Give some tips for learning a new language."
-            ],
-            "preferred_comment": [
+            ][i],                                  # VARCHAR
+            "c_root_id_A": f"test_comment_a_{i+1}", # VARCHAR
+            "c_root_id_B": f"test_comment_b_{i+1}", # VARCHAR
+            "created_at_utc_A": int(time.time()) - 120, # BIGINT
+            "created_at_utc_B": int(time.time()) - 220, # BIGINT
+            "score_A": score_a,                    # BIGINT
+            "score_B": score_b,                    # BIGINT
+            "human_ref_A": [
                 "Photosynthesis is the process where plants convert sunlight, water, and carbon dioxide into glucose and oxygen. The chlorophyll in plant cells captures light energy, which is used to convert CO2 and water into glucose, releasing oxygen as a byproduct.",
                 "To learn a new language effectively: practice daily, use spaced repetition for vocabulary, immerse yourself through media, find conversation partners, focus on common words first, use language learning apps, and don't be afraid to make mistakes."
-            ],
-            "dispreferred_comment": [
+            ][i],                                  # VARCHAR
+            "human_ref_B": [
                 "Plants make food using sunlight. They take in water and air and turn it into energy.",
                 "Just download Duolingo and use it every day. Also maybe watch some foreign movies."
-            ],
-            "llama_scores": [
-                0.91, 0.87
-            ],
-            "chosen_similarity": [
-                0.82, 0.78
-            ],
-            "rejected_similarity": [
-                0.58, 0.51
-            ]
+            ][i],                                  # VARCHAR
+            "labels": 1,                           # BIGINT - 1 means A is preferred
+            "seconds_difference": 100.0,           # DOUBLE
+            "score_ratio": float(score_a) / float(score_b) # DOUBLE
         }
+        test_samples.append(sample)
+        
+    # Organize data by split
+    test_data = {
+        "train": train_samples,
+        "validation": val_samples,
+        "test": test_samples
     }
     
     return test_data

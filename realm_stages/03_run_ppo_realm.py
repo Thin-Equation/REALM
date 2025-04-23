@@ -30,20 +30,14 @@ def load_prompts(config: dict) -> List[str]:
         # Load only the training split needed for prompts
         train_data = data_processor.load_dataset(splits=['train'])['train']
 
-        # Extract prompts - Use the 'post' field from SHP as the prompt
-        # Adjust field name if necessary based on SHPDataProcessor output structure
-        if 'post' in train_data.column_names:
-             prompts = train_data['post']
-        elif isinstance(train_data, list) and len(train_data) > 0 and isinstance(train_data[0], dict) and 'post' in train_data[0]:
-             prompts = [item['post'] for item in train_data]
+        # Extract prompts - Use the 'history' field from SHP as the prompt
+        # SHP dataset uses 'history' field for the prompt content
+        if 'history' in train_data.column_names:
+            prompts = train_data['history']
+        elif isinstance(train_data, list) and len(train_data) > 0 and isinstance(train_data[0], dict) and 'history' in train_data[0]:
+            prompts = [item['history'] for item in train_data]
         else:
-             # Add fallback logic or raise error if 'post' field is not found
-             # Example: Check 'history' or other potential fields
-             logger.warning("Could not find 'post' field directly. Trying 'history'.")
-             if 'history' in train_data.column_names:
-                 prompts = train_data['history']
-             else:
-                  raise ValueError("Failed to extract prompts for PPO training. Cannot find 'post' or 'history' field.")
+            raise ValueError("Failed to extract prompts for PPO training. Cannot find 'history' field in SHP dataset.")
 
         # Select a subset if configured
         ppo_config = config.get('rlhf', {}).get('ppo', {})

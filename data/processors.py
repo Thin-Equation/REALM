@@ -27,31 +27,61 @@ class SHPDataProcessor:
         # Create cache directory if it doesn't exist
         os.makedirs(self.cache_dir, exist_ok=True)
     
-    def load_dataset(self) -> Tuple[Any, Any, Any]:
-        """Load the SHP dataset and return train, validation, and test splits"""
+    def load_dataset(self, splits=None) -> Dict[str, Any]:
+        """Load the SHP dataset and return specified splits
+        
+        Args:
+            splits: List of splits to load (e.g., ['train', 'validation', 'test'])
+                   If None, all splits are loaded.
+        
+        Returns:
+            Dictionary mapping split names to datasets
+        """
         logger.info(f"Loading dataset: {self.dataset_name}")
         
         try:
+            # Set default splits if not provided
+            if splits is None:
+                splits = ['train', 'validation', 'test']
+                
             # Load dataset using Hugging Face datasets
-            dataset = load_dataset(self.dataset_name)
+            data_dir = self.config.get("data", {}).get("data_dir", None)
+            if data_dir:
+                logger.info(f"Loading specific data directory: {data_dir}")
+                dataset = load_dataset(self.dataset_name, data_dir=data_dir)
+            else:
+                dataset = load_dataset(self.dataset_name)
             
             # Process and return the dataset splits
-            train_data = dataset["train"]
-            val_data = dataset["validation"]
-            test_data = dataset["test"]
+            result = {}
+            for split in splits:
+                if split in dataset:
+                    result[split] = dataset[split]
+                    logger.info(f"Loaded {split} split with {len(dataset[split])} examples")
+                else:
+                    logger.warning(f"Split '{split}' not found in dataset")
             
-            logger.info(f"Dataset loaded: {len(train_data)} training examples, "
-                      f"{len(val_data)} validation examples, {len(test_data)} test examples")
-            
-            # Verify the dataset has the expected fields
-            expected_fields = ["post", "preferred_comment", "dispreferred_comment"]
-            sample = train_data[0]
-            for field in expected_fields:
-                if field not in sample:
-                    logger.warning(f"Dataset is missing expected field: {field}")
+            # Verify the dataset has the expected SHP fields
+            if len(result) > 0:
+                sample_split = list(result.keys())[0]
+                sample = result[sample_split][0]
+                
+                # These are the expected fields for SHP dataset from Hugging Face
+                expected_fields = [
+                    "post_id", "domain", "upvote_ratio", "history", 
+                    "c_root_id_A", "c_root_id_B", "created_at_utc_A", "created_at_utc_B",
+                    "score_A", "score_B", "human_ref_A", "human_ref_B", 
+                    "labels", "seconds_difference", "score_ratio"
+                ]
+                
+                missing_fields = [f for f in expected_fields if f not in sample]
+                if missing_fields:
+                    logger.warning(f"Dataset is missing expected SHP fields: {missing_fields}")
                     logger.warning(f"Available fields: {list(sample.keys())}")
+                else:
+                    logger.info("Dataset structure matches SHP format")
             
-            return train_data, val_data, test_data
+            return result
             
         except Exception as e:
             logger.error(f"Error loading SHP dataset: {str(e)}")
@@ -214,10 +244,14 @@ class SHPRewardDataset(Dataset):
             prompt = item["history"]
             
             # For preferred/dispreferred, use human_ref_A/B based on 'labels'
-            if item["labels"] == "A":
+            # In SHP dataset, 'labels' is 1 when human_ref_A is preferred, 0 when human_ref_B is preferred
+            # Ensure labels is treated as an integer
+            label_value = int(item["labels"]) if not isinstance(item["labels"], bool) else (1 if item["labels"] else 0)
+            
+            if label_value == 1:  # human_ref_A is preferred
                 chosen = item["human_ref_A"]
                 rejected = item["human_ref_B"]
-            else:
+            else:  # human_ref_B is preferred (label_value == 0)
                 chosen = item["human_ref_B"] 
                 rejected = item["human_ref_A"]
             
