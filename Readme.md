@@ -1,17 +1,18 @@
 # REALM - A Novel Reward Model
 
-This repository provides a production-ready implementation of a combined reward model that leverages both infly/INF-ORM-Llama3.1-70B for reward scoring and Google's Gemini embeddings for semantic similarity. The combined model can be used for Reinforcement Learning from Human Feedback (RLHF) to fine-tune large language models using techniques like PPO and DPO.
+This repository provides a production-ready implementation of a combined reward model that leverages both NVIDIA NIM Llama 3.1 Nemotron 70B Reward model and Lajavaness embeddings for semantic similarity. The combined model can be used for Reinforcement Learning from Human Feedback (RLHF) to fine-tune large language models using techniques like PPO and DPO.
 
 Architecture Overview
 
 ## Features
 
-- 🔍 Combined reward signal using infly/INF-ORM-Llama3.1-70B and Gemini embeddings
+- 🔍 Combined reward signal using NVIDIA NIM Llama 3.1 Nemotron 70B Reward model and Lajavaness embeddings
 - 🧠 Linear neural network trained on the Stanford Human Preferences (SHP) dataset
-- 🚀 Optimized for memory efficiency with support for 4-bit and 8-bit quantization
+- 🚀 Optimized for memory efficiency with streamlined API interactions
 - 📊 Robust caching, logging, and error handling for production deployment
 - 🔄 Ready-to-use implementations for PPO and DPO fine-tuning
 - 🐳 Docker support for reproducible deployment
+- 📊 Evaluation framework for comparing reward model performance on TruthfulQA
 
 ## Installation
 
@@ -19,7 +20,7 @@ Architecture Overview
 
 - Python 3.8+
 - CUDA-compatible GPU (recommended)
-- Google Gemini API key
+- NVIDIA NIM API key
 
 
 ### Setup
@@ -37,13 +38,13 @@ pip install -r requirements.txt
 
 3. Set up environment variables:
 ```bash
-export GEMINI_API_KEY=your_gemini_api_key
+export NVIDIA_NIM_API_KEY=your_nim_api_key
 ```
 
 Alternatively, create a `.env` file:
 
 ```
-GEMINI_API_KEY=your_gemini_api_key
+NVIDIA_NIM_API_KEY=your_nim_api_key
 ```
 
 
@@ -56,7 +57,7 @@ realm/
 ├── data/
 │   └── processors.py         # Data processing utilities
 ├── models/
-│   ├── llama_reward.py       # Llama 3.1 reward model wrapper
+│   ├── nim_reward.py         # NIM Llama 3.1 Nemotron Reward model wrapper
 │   └── reward_model.py       # Linear reward model implementation
 ├── training/
 │   ├── trainer.py            # Training loop implementation
@@ -67,12 +68,13 @@ realm/
 │   ├── ppo_integration.py    # PPO implementation
 │   └── dpo_integration.py    # DPO implementation
 ├── utils/
-│   ├── logging_utils.py      # Logging utilities
+│   ├── validation.py         # Environment validation utilities
 │   └── embedding_utils.py    # Embedding utilities
 ├── main.py                   # Main entry point
+├── nim_ppo_finetune.py       # NIM-only PPO fine-tuning script
+├── evaluate_models.py        # Model evaluation script
 ├── api_server.py             # API server for inference
-├── requirements.txt          # Dependencies
-└── Dockerfile                # Docker configuration
+└── requirements.txt          # Dependencies
 ```
 
 
@@ -80,7 +82,7 @@ realm/
 
 ### Training the Combined Reward Model
 
-Train the linear neural network to combine Llama 3.1 rewards and Gemini embeddings:
+Train the linear neural network to combine NIM Llama 3.1 Nemotron rewards and Lajavaness embeddings:
 
 ```bash
 python main.py --mode train --config config/config.yaml
@@ -113,6 +115,12 @@ Use the combined reward model for PPO fine-tuning:
 python main.py --mode ppo --model_path models/final_model.pt --dataset_path data/prompts.json
 ```
 
+Use only the NIM reward model for PPO fine-tuning (for comparison):
+
+```bash
+python nim_ppo_finetune.py --config config/config.yaml --output_dir models/nim_ppo_finetuned --max_steps 1000
+```
+
 
 ### Fine-tuning with DPO
 
@@ -123,28 +131,36 @@ python main.py --mode dpo --model_path models/final_model.pt --dataset_path data
 ```
 
 
+### Comparing Models
+
+Compare the performance of both fine-tuned models on the TruthfulQA dataset:
+
+```bash
+python evaluate_models.py --combined_model_path models/ppo_finetuned --nim_model_path models/nim_ppo_finetuned --output_dir evaluation_results
+```
+
+
 ## Configuration
 
 The `config/config.yaml` file contains all configuration parameters:
 
 ```yaml
-llama_reward:
-  model_id: "infly/INF-ORM-Llama3.1-70B"
-  quantization: "4bit"  # Options: "4bit", "8bit", or null for no quantization
-  device_map: "auto"
-  max_length: 2048
+nim_reward:
+  api_key: "${NVIDIA_NIM_API_KEY}"
+  base_url: "https://integrate.api.nvidia.com/v1"
+  model_id: "nvidia/llama-3.1-nemotron-70b-reward"
+  max_retries: 3
+  retry_delay: 2.0
 
-gemini:
-  api_key: "${GEMINI_API_KEY}"
-  model_id: "models/embedding-001"
-  task_type: "retrieval_document"
+embedding:
+  model_id: "Lajavaness/bilingual-embedding-large"
 
 data:
   dataset_name: "stanfordnlp/SHP"
   preprocessing:
     max_length: 1024
     batch_size: 16
-    num_workers: 4
+    num_workers: 0
     cache_dir: "./cache"
 
 model:
@@ -155,8 +171,8 @@ model:
 
 training:
   seed: 42
-  learning_rate: 1e-4
-  weight_decay: 1e-5
+  learning_rate: 0.0001
+  weight_decay: 0.01
   num_epochs: 10
   # Additional training parameters...
 
@@ -172,45 +188,17 @@ rlhf:
     # Additional DPO parameters...
 ```
 
-
-## Docker Deployment
-
-Build and run the Docker container:
-
-```bash
-docker build -t combined-reward-model .
-docker run -e GEMINI_API_KEY=your_gemini_api_key combined-reward-model
-```
-
-
-## API Server
-
-Start the API server for inference:
-
-```bash
-python api_server.py
-```
-
-Example API request:
-
-```bash
-curl -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "What is machine learning?", "response": "Machine learning is a field of AI that enables systems to learn from data."}'
-```
-
-
 ## Model Architecture
 
 The combined reward model uses a simple linear neural network to combine two features:
 
-1. **Llama 3.1 Reward Score**: Generated by the infly/INF-ORM-Llama3.1-70B model, which evaluates the quality of the response.
-2. **Semantic Similarity Score**: Calculated using cosine similarity between prompt and response Gemini embeddings.
+1. **NIM Llama 3.1 Nemotron Reward Score**: Generated by the NVIDIA NIM reward model API, which evaluates the quality of the response.
+2. **Semantic Similarity Score**: Calculated using cosine similarity between prompt and response Lajavaness embeddings.
 
 The architecture consists of:
 
 - Input layer (2 dimensions)
-- Optional hidden layers
+- Hidden layers [64, 32]
 - Output layer (1 dimension) representing the final reward score
 
 
@@ -225,24 +213,28 @@ The model is trained on the [Stanford Human Preferences (SHP) dataset](https://h
 
 ## Performance Considerations
 
-- **Memory Usage**: With 4-bit quantization, the Llama 3.1 70B model requires approximately 18GB of VRAM.
-- **Throughput**: Batch processing is recommended for optimal performance.
-- **API Costs**: Be mindful of Gemini API usage costs when processing large datasets.
+- **API Usage**: The NIM Reward model is accessed via API, so be mindful of usage limits and costs.
+- **Throughput**: Batch processing and caching are implemented for optimal performance.
+- **Training on Brev**: For training on NVIDIA Brev, use the provided `brev_train_pipeline.sh` script.
 
 
-## Contributing
+## Verifying Model Weights
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+To verify that all model weights are properly saved:
 
-## License
+```bash
+python verify_models.py
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This will check for the existence of:
+1. Reward Model (LinearRewardModel): `models/final_model.pt`
+2. Combined-Reward Fine-tuned LLM: `models/ppo_finetuned/`
+3. NIM-Reward Fine-tuned LLM: `models/nim_ppo_finetuned/`
 
 ## Acknowledgements
 
-- [nvidia/Llama-3.1-Nemotron-70B-Reward](https://huggingface.co/nvidia/Llama-3.1-Nemotron-70B-Reward) for the reward model 
-- [infly/INF-ORM-Llama3.1-70B](https://huggingface.co/infly/INF-ORM-Llama3.1-70B) for the reward model
-- [Google Gemini API](https://ai.google.dev/gemini-api) for the embedding model
+- [NVIDIA NIM Llama-3.1-Nemotron-70B-Reward](https://huggingface.co/nvidia/Llama-3.1-Nemotron-70B-Reward) for the reward model 
+- [Lajavaness/bilingual-embedding-large](https://huggingface.co/Lajavaness/bilingual-embedding-large) for the embedding model
 - [Stanford NLP](https://huggingface.co/datasets/stanfordnlp/SHP) for the SHP dataset
 - [TRL library](https://github.com/huggingface/trl) for RLHF implementation
 
