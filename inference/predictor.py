@@ -91,3 +91,33 @@ class RewardPredictor:
             reward = self.model(features.unsqueeze(0))
         
         return reward.item()
+
+
+class NIMRewardAdapter:
+    """
+    Adapter class to make NIM reward model compatible with the HuggingFacePPOTrainer
+    by providing the same interface as RewardPredictor
+    """
+    
+    def __init__(self, nim_reward_model: NIMRewardModel):
+        """
+        Initialize the adapter with a NIM reward model
+        
+        Args:
+            nim_reward_model: Instance of NIMRewardModel
+        """
+        self.nim_reward_model = nim_reward_model
+        logger.info("NIM Reward Adapter initialized")
+    
+    def predict(self, prompt: str, response: str) -> float:
+        """
+        Predict reward using only the NIM reward model
+        
+        Args:
+            prompt: The user prompt
+            response: The model's response
+            
+        Returns:
+            Float reward score from the NIM model
+        """
+        return self.nim_reward_model.get_reward_score(prompt, response)

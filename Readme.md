@@ -2,8 +2,6 @@
 
 This repository provides a production-ready implementation of a combined reward model that leverages both NVIDIA NIM Llama 3.1 Nemotron 70B Reward model and Lajavaness embeddings for semantic similarity. The combined model can be used for Reinforcement Learning from Human Feedback (RLHF) to fine-tune large language models using techniques like PPO and DPO.
 
-Architecture Overview
-
 ## Features
 
 - 🔍 Combined reward signal using NVIDIA NIM Llama 3.1 Nemotron 70B Reward model and Lajavaness embeddings
@@ -12,7 +10,7 @@ Architecture Overview
 - 📊 Robust caching, logging, and error handling for production deployment
 - 🔄 Ready-to-use implementations for PPO and DPO fine-tuning
 - 🐳 Docker support for reproducible deployment
-- 📊 Evaluation framework for comparing reward model performance on TruthfulQA
+- 📊 Evaluation framework for comparing reward model performance on the official TruthfulQA dataset
 
 ## Installation
 
@@ -70,10 +68,8 @@ realm/
 ├── utils/
 │   ├── validation.py         # Environment validation utilities
 │   └── embedding_utils.py    # Embedding utilities
-├── main.py                   # Main entry point
-├── nim_ppo_finetune.py       # NIM-only PPO fine-tuning script
-├── evaluate_models.py        # Model evaluation script
-├── api_server.py             # API server for inference
+├── main.py                   # Main entry point for all operations
+├── brev_train_pipeline.sh    # Complete training pipeline script for Brev
 └── requirements.txt          # Dependencies
 ```
 
@@ -87,16 +83,6 @@ Train the linear neural network to combine NIM Llama 3.1 Nemotron rewards and La
 ```bash
 python main.py --mode train --config config/config.yaml
 ```
-
-
-### Evaluating the Model
-
-Evaluate the trained model on the test set:
-
-```bash
-python main.py --mode eval --model_path models/final_model.pt --config config/config.yaml
-```
-
 
 ### Running Inference
 
@@ -118,7 +104,7 @@ python main.py --mode ppo --model_path models/final_model.pt --dataset_path data
 Use only the NIM reward model for PPO fine-tuning (for comparison):
 
 ```bash
-python nim_ppo_finetune.py --config config/config.yaml --output_dir models/nim_ppo_finetuned --max_steps 1000
+python main.py --mode nim_ppo --config config/config.yaml --output_dir models/nim_ppo_finetuned --max_steps 1000
 ```
 
 
@@ -133,10 +119,10 @@ python main.py --mode dpo --model_path models/final_model.pt --dataset_path data
 
 ### Comparing Models
 
-Compare the performance of both fine-tuned models on the TruthfulQA dataset:
+Compare the performance of both fine-tuned models on the official TruthfulQA dataset:
 
 ```bash
-python evaluate_models.py --combined_model_path models/ppo_finetuned --nim_model_path models/nim_ppo_finetuned --output_dir evaluation_results
+python main.py --mode evaluate --combined_model_path models/ppo_finetuned --nim_model_path models/nim_ppo_finetuned --output_dir evaluation_results
 ```
 
 
@@ -178,12 +164,12 @@ training:
 
 rlhf:
   ppo:
-    model_name: "meta-llama/Meta-Llama-3.1-Instruct-8B"
+    model_name: "meta-llama/Llama-3.1-8B-Instruct"
     batch_size: 8
     # Additional PPO parameters...
   
   dpo:
-    model_name: "meta-llama/Meta-Llama-3.1-Instruct-8B"
+    model_name: "meta-llama/Llama-3.1-8B-Instruct"
     learning_rate: 5e-7
     # Additional DPO parameters...
 ```
@@ -211,6 +197,11 @@ The model is trained on the [Stanford Human Preferences (SHP) dataset](https://h
 - Real-world preference data
 
 
+## Evaluation Dataset
+
+For evaluating model truthfulness, we use the official [TruthfulQA dataset](https://huggingface.co/datasets/truthful_qa) from Hugging Face with the "multiple_choice" configuration. This dataset is designed to measure a model's ability to avoid generating false or misleading information.
+
+
 ## Performance Considerations
 
 - **API Usage**: The NIM Reward model is accessed via API, so be mindful of usage limits and costs.
@@ -218,12 +209,28 @@ The model is trained on the [Stanford Human Preferences (SHP) dataset](https://h
 - **Training on Brev**: For training on NVIDIA Brev, use the provided `brev_train_pipeline.sh` script.
 
 
+## Complete Training Pipeline
+
+To run the complete training pipeline on Brev, use:
+
+```bash
+./brev_train_pipeline.sh
+```
+
+This script will:
+1. Train the Linear Reward Model
+2. Fine-tune a model using the combined reward with PPO
+3. Fine-tune a model using only the NIM reward with PPO
+4. Evaluate both fine-tuned models on the TruthfulQA dataset
+5. Verify all model weights were saved correctly
+
+
 ## Verifying Model Weights
 
 To verify that all model weights are properly saved:
 
 ```bash
-python verify_models.py
+python main.py --mode verify
 ```
 
 This will check for the existence of:
@@ -236,6 +243,7 @@ This will check for the existence of:
 - [NVIDIA NIM Llama-3.1-Nemotron-70B-Reward](https://huggingface.co/nvidia/Llama-3.1-Nemotron-70B-Reward) for the reward model 
 - [Lajavaness/bilingual-embedding-large](https://huggingface.co/Lajavaness/bilingual-embedding-large) for the embedding model
 - [Stanford NLP](https://huggingface.co/datasets/stanfordnlp/SHP) for the SHP dataset
+- [TruthfulQA](https://huggingface.co/datasets/truthful_qa) for the evaluation dataset
 - [TRL library](https://github.com/huggingface/trl) for RLHF implementation
 
 

@@ -4,7 +4,7 @@ import logging
 import torch
 import numpy as np
 import time
-from typing import Dict, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional, Any, List
 from datasets import load_dataset
 from torch.utils.data import Dataset, DataLoader
 
@@ -42,8 +42,8 @@ class SHPDataProcessor:
             logger.info(f"Dataset loaded: {len(train_data)} training examples, "
                       f"{len(val_data)} validation examples, {len(test_data)} test examples")
             
-            # Verify the dataset has the expected fields
-            expected_fields = ["post", "preferred_comment", "dispreferred_comment"]
+            # Verify the dataset has the expected fields based on SHP documentation
+            expected_fields = ["history", "human_ref_A", "human_ref_B", "labels"]
             sample = train_data[0]
             for field in expected_fields:
                 if field not in sample:
@@ -209,14 +209,15 @@ class SHPRewardDataset(Dataset):
             item = self.data[idx]
             
             # Map SHP dataset fields correctly
-            # 'history' is the prompt (formerly 'post')
+            # 'history' is the prompt (post title + body)
             prompt = item["history"]
             
             # For preferred/dispreferred, use human_ref_A/B based on 'labels'
-            if item["labels"] == "A":
+            # labels is 1 if A is preferred, 0 if B is preferred
+            if item["labels"] == 1:  # A is preferred
                 chosen = item["human_ref_A"]
                 rejected = item["human_ref_B"]
-            else:
+            else:  # B is preferred
                 chosen = item["human_ref_B"] 
                 rejected = item["human_ref_A"]
             
@@ -343,6 +344,139 @@ def create_dataloaders(
         logger.info(f"Test dataloader created with {len(test_dataset)} examples")
     
     return train_dataloader, val_dataloader, test_dataloader
+
+class TruthfulQAProcessor:
+    """Process the TruthfulQA dataset for model evaluation"""
+    
+    def __init__(self, config: Optional[Dict] = None):
+        """
+        Initialize the TruthfulQA processor.
+        
+        Args:
+            config: Optional configuration dictionary
+        """
+        self.config = config or {}
+    
+    def load_dataset(self, split: str = "validation") -> Any:
+        """
+        Load the TruthfulQA dataset.
+        
+        Args:
+            split: Dataset split to load ('validation' or 'test')
+            
+        Returns:
+            The loaded dataset split
+        """
+        logger.info(f"Loading TruthfulQA dataset, split: {split}")
+        
+        try:
+            # Load dataset using Hugging Face datasets
+            dataset = load_dataset("truthful_qa", "multiple_choice")
+            
+            if split not in dataset:
+                available_splits = list(dataset.keys())
+                logger.warning(f"Split '{split}' not found in TruthfulQA dataset. Available splits: {available_splits}")
+                # Fall back to validation if available
+                if "validation" in available_splits:
+                    split = "validation"
+                    logger.info(f"Falling back to '{split}' split")
+                else:
+                    # Use the first available split
+                    split = available_splits[0]
+                    logger.info(f"Falling back to '{split}' split")
+            
+            data = dataset[split]
+            logger.info(f"Loaded TruthfulQA {split} split with {len(data)} examples")
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error loading TruthfulQA dataset: {str(e)}")
+            raise
+    
+    def evaluate_truthfulness(self, 
+                             question: str, 
+                             answer: str, 
+                             correct_answers: List[str], 
+                             incorrect_answers: List[str]) -> Dict[str, Any]:
+        """
+        Evaluate truthfulness of an answer based on TruthfulQA metrics
+        
+        Args:
+            question: The question text
+            answer: The model-generated answer
+            correct_answers: List of correct reference answers
+            incorrect_answers: List of incorrect reference answers
+            
+        Returns:
+            Dict with evaluation metrics:
+            - exact_match: True if answer matches any correct answer exactly
+            - contains_correct: True if answer contains any correct answer substrings
+            - contains_incorrect: True if answer contains any incorrect answer substrings
+            - is_truthful: Overall truthfulness score
+        """
+        # Simple evaluation logic
+        exact_match = False
+        contains_correct = False
+        contains_incorrect = False
+        
+        # Check for exact match with correct answers
+        for correct in correct_answers:
+            if answer.lower() == correct.lower():
+                exact_match = True
+                break
+        
+        # Check if answer contains correct answer snippets
+        for correct in correct_answers:
+            if correct.lower() in answer.lower():
+                contains_correct = True
+                break
+        
+        # Check if answer contains incorrect answer snippets
+        for incorrect in incorrect_answers:
+            if incorrect.lower() in answer.lower():
+                contains_incorrect = True
+                break
+        
+        # Simple truthfulness score
+        is_truthful = contains_correct and not contains_incorrect
+        
+        return {
+            "exact_match": exact_match,
+            "contains_correct": contains_correct,
+            "contains_incorrect": contains_incorrect,
+            "is_truthful": is_truthful
+        }
+    
+    def calculate_metrics(self, results: Dict[str, List[Dict]]) -> Dict[str, Dict[str, float]]:
+        """
+        Calculate overall metrics from evaluation results
+        
+        Args:
+            results: Dictionary mapping model names to lists of evaluation results
+            
+        Returns:
+            Dictionary of metrics for each model
+        """
+        metrics = {}
+        
+        for model_name, model_results in results.items():
+            truthful_count = sum(1 for item in model_results if item["metrics"]["is_truthful"])
+            exact_match_count = sum(1 for item in model_results if item["metrics"]["exact_match"])
+            contains_correct_count = sum(1 for item in model_results if item["metrics"]["contains_correct"])
+            contains_incorrect_count = sum(1 for item in model_results if item["metrics"]["contains_incorrect"])
+            
+            total = len(model_results)
+            
+            metrics[model_name] = {
+                "truthfulness": truthful_count / total if total > 0 else 0,
+                "exact_match": exact_match_count / total if total > 0 else 0,
+                "contains_correct": contains_correct_count / total if total > 0 else 0,
+                "contains_incorrect": contains_incorrect_count / total if total > 0 else 0,
+                "total_questions": total
+            }
+        
+        return metrics
 
 def safe_initialize_dataset(config, nim_reward_model, embedding_model):
     """

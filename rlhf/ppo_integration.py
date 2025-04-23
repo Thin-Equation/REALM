@@ -4,13 +4,15 @@ import torch
 import logging
 from typing import Dict, List, Optional
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from datasets import Dataset
+from datasets import Dataset, load_dataset
 from tqdm import tqdm
 
-# Import specific components for TRL 0.16.1
 from trl import PPOConfig, PPOTrainer
 
 from inference.predictor import RewardPredictor
+from models.nim_reward import NIMRewardModel
+# Add import for SHPDataProcessor
+from data.processors import SHPDataProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -84,15 +86,79 @@ class HuggingFacePPOTrainer:
             mini_batch_size=ppo_config_dict.get("mini_batch_size", 4),
         )
     
-    def _prepare_dataset(self, dataset: Dict) -> Dataset:
-        """Convert dict dataset to HF Dataset for PPO Trainer"""
-        prompts = dataset.get("prompt", [])
-        if not prompts:
-            logger.warning("No prompts found in dataset")
-            return None
+    def _prepare_dataset(self, dataset: Optional[Dict] = None, dataset_name: str = None, max_samples: int = None) -> Dataset:
+        """
+        Convert dict dataset to HF Dataset for PPO Trainer or load dataset directly
+        
+        Args:
+            dataset: Dictionary with prompts under "prompt" key
+            dataset_name: Name of HF dataset to load directly (e.g., "stanfordnlp/SHP")
+            max_samples: Maximum number of samples to use
             
-        # Create HF dataset with prompts
-        hf_dataset = Dataset.from_dict({"query": prompts})
+        Returns:
+            HuggingFace Dataset formatted for PPO training
+        """
+        # If dataset dict is provided, use it
+        if dataset is not None and "prompt" in dataset:
+            prompts = dataset.get("prompt", [])
+            if not prompts:
+                logger.warning("No prompts found in dataset dictionary")
+                return None
+                
+            # Create HF dataset with prompts
+            hf_dataset = Dataset.from_dict({"query": prompts})
+        
+        # If dataset_name is provided, load it using SHPDataProcessor for SHP dataset
+        elif dataset_name is not None:
+            logger.info(f"Loading dataset: {dataset_name}")
+            try:
+                # Handle SHP dataset using SHPDataProcessor
+                if "stanfordnlp/SHP" in dataset_name:
+                    # Create temporary config for SHPDataProcessor
+                    temp_config = {"data": {"dataset_name": dataset_name, "preprocessing": {"cache_dir": "cache", "max_length": 1024}}}
+                    data_processor = SHPDataProcessor(temp_config)
+                    train_data, _, _ = data_processor.load_dataset()
+                    
+                    # Extract prompts from the "history" field
+                    prompts = [item["history"] for item in train_data]
+                    hf_dataset = Dataset.from_dict({"query": prompts})
+                    logger.info(f"Loaded {len(prompts)} prompts from SHP dataset using SHPDataProcessor")
+                else:
+                    # For non-SHP datasets, use direct loading
+                    raw_dataset = load_dataset(dataset_name)
+                    
+                    # Try to find a suitable split
+                    train_split = raw_dataset.get("train", raw_dataset.get("default", None))
+                    if train_split is None:
+                        logger.error(f"No suitable split found in dataset {dataset_name}")
+                        return None
+                    
+                    # Try to find a suitable column
+                    prompt_col = None
+                    for col in ["prompt", "question", "text", "input", "instruction", "history"]:
+                        if col in train_split.column_names:
+                            prompt_col = col
+                            break
+                    
+                    if prompt_col is None:
+                        logger.error(f"No suitable prompt column found in dataset {dataset_name}")
+                        return None
+                    
+                    prompts = train_split[prompt_col]
+                    hf_dataset = Dataset.from_dict({"query": prompts})
+                    logger.info(f"Loaded {len(prompts)} prompts from {dataset_name} using column {prompt_col}")
+            except Exception as e:
+                logger.error(f"Error loading dataset {dataset_name}: {str(e)}")
+                return None
+        else:
+            logger.error("Either dataset or dataset_name must be provided")
+            return None
+        
+        # Limit number of samples if specified
+        if max_samples and len(hf_dataset) > max_samples:
+            hf_dataset = hf_dataset.select(range(max_samples))
+            logger.info(f"Using {max_samples} samples from dataset")
+            
         return hf_dataset
     
     def _reward_fn(self, queries: List[str], responses: List[str]) -> List[float]:
@@ -155,10 +221,6 @@ class HuggingFacePPOTrainer:
             
             # Initialize metrics tracking
             epoch_rewards = []
-            epoch_kl_divs = []
-            epoch_losses = []
-            
-            # Use a simplified approach for compatibility across TRL versions
             
             # Get only the amount of data we need for this epoch
             epoch_dataset = hf_dataset.shuffle(seed=epoch)
@@ -232,4 +294,159 @@ class HuggingFacePPOTrainer:
         self.model.save_pretrained(output_dir)
         self.tokenizer.save_pretrained(output_dir)
         
+        logger.info(f"Model and tokenizer saved to {output_dir}")
+
+
+# Import NIMPPOTrainer functionality
+class NIMPPOTrainer:
+    """
+    PPO Trainer that uses NIM reward model directly for LLM fine-tuning
+    """
+    
+    def __init__(
+        self,
+        config: Dict,
+        nim_reward_model: NIMRewardModel,
+        device = None
+    ):
+        self.config = config
+        self.nim_reward_model = nim_reward_model
+        
+        # Set device
+        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Initialize tokenizer and model
+        model_name = config["rlhf"]["ppo"]["model_name"]
+        logger.info(f"Loading model and tokenizer: {model_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name)
+        
+        # Ensure tokenizer has pad token
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        
+        # Configure PPO
+        ppo_config = PPOConfig(
+            model_name=config["rlhf"]["ppo"]["model_name"],
+            learning_rate=config["rlhf"]["ppo"]["learning_rate"],
+            batch_size=config["rlhf"]["ppo"]["batch_size"],
+            mini_batch_size=config["rlhf"]["ppo"]["mini_batch_size"],
+            gradient_accumulation_steps=config["rlhf"]["ppo"]["gradient_accumulation_steps"],
+            optimize_cuda_cache=True,
+            early_stopping=True,
+            target_kl=0.1,
+            kl_penalty=config["rlhf"]["ppo"]["kl_penalty"],
+            seed=config["training"]["seed"]
+        )
+        
+        # Initialize the PPO trainer
+        self.ppo_trainer = PPOTrainer(
+            config=ppo_config,
+            model=self.model,
+            ref_model=None,
+            tokenizer=self.tokenizer,
+            dataset=None,  # We'll use a custom data iteration
+            data_collator=None
+        )
+        
+        logger.info("NIM PPO Trainer initialized")
+    
+    def _get_reward(self, prompt: str, response: str) -> float:
+        """Get reward directly from NIM reward model"""
+        return self.nim_reward_model.get_reward_score(prompt, response)
+    
+    def _generate_responses(self, prompts: list, max_length: int = 512) -> list:
+        """Generate responses from the model"""
+        responses = []
+        
+        for prompt in tqdm(prompts, desc="Generating responses"):
+            inputs = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+            
+            # Generate with current policy model
+            outputs = self.model.generate(
+                inputs, 
+                max_length=max_length, 
+                do_sample=True,
+                temperature=0.7,
+                top_p=0.9,
+                pad_token_id=self.tokenizer.pad_token_id
+            )
+            
+            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            response = response[len(prompt):]  # Remove the prompt
+            
+            responses.append(response)
+        
+        return responses
+    
+    def train(self, dataset_path: str = None, max_steps: int = 1000) -> None:
+        """
+        Train the model using PPO with NIM reward model
+        
+        Args:
+            dataset_path: Path to dataset file (JSON with 'prompt' key)
+            max_steps: Maximum number of training steps
+        """
+        # Load dataset
+        if (dataset_path):
+            import json
+            with open(dataset_path, "r") as f:
+                dataset = json.load(f)
+            prompts = dataset["prompt"]
+        else:
+            # Use SHP dataset loaded via SHPDataProcessor
+            logger.info("No dataset provided, using SHP dataset via SHPDataProcessor")
+            # Create temporary config for SHPDataProcessor
+            temp_config = {"data": {"dataset_name": "stanfordnlp/SHP", "preprocessing": {"cache_dir": "cache", "max_length": 1024}}}
+            data_processor = SHPDataProcessor(temp_config)
+            train_data, _, _ = data_processor.load_dataset()
+            # Use the correct 'history' field which contains the post content in SHP
+            prompts = [item["history"] for item in train_data]
+        
+        logger.info(f"Loaded {len(prompts)} prompts for training")
+        
+        # Training loop
+        step = 0
+        batch_size = self.config["rlhf"]["ppo"]["batch_size"]
+        
+        for i in tqdm(range(0, len(prompts), batch_size)):
+            # Check if max_steps is reached
+            if step >= max_steps:
+                logger.info(f"Reached maximum steps {max_steps}")
+                break
+            
+            # Get batch of prompts
+            batch_prompts = prompts[i:i+batch_size]
+            
+            # Generate responses
+            batch_responses = self._generate_responses(batch_prompts)
+            
+            # Get rewards directly from NIM model
+            batch_rewards = [self._get_reward(p, r) for p, r in zip(batch_prompts, batch_responses)]
+            
+            # Prepare inputs for PPO step
+            query_tensors = [
+                self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+                for prompt in batch_prompts
+            ]
+            
+            response_tensors = [
+                self.tokenizer.encode(response, return_tensors="pt").to(self.device)
+                for response in batch_responses
+            ]
+            
+            # Run PPO step
+            stats = self.ppo_trainer.step(query_tensors, response_tensors, batch_rewards)
+            
+            # Log stats
+            logger.info(f"Step {step+1}: {stats}")
+            step += 1
+        
+        logger.info("PPO training with NIM rewards completed")
+    
+    def save_model(self, output_dir: str) -> None:
+        """Save the fine-tuned model and tokenizer"""
+        os.makedirs(output_dir, exist_ok=True)
+        self.model.save_pretrained(output_dir)
+        self.tokenizer.save_pretrained(output_dir)
         logger.info(f"Model and tokenizer saved to {output_dir}")

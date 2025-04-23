@@ -39,15 +39,15 @@ python main.py --mode ppo --model_path models/final_model.pt
 echo "$(date): Custom reward model fine-tuning completed"
 
 echo "$(date): Step 3/4 - Fine-tuning with NIM reward model using PPO..."
-python nim_ppo_finetune.py --config config/config.yaml --output_dir models/nim_ppo_finetuned --max_steps 1000
+python main.py --mode nim_ppo --config config/config.yaml --output_dir models/nim_ppo_finetuned --max_steps 1000
 echo "$(date): NIM reward model fine-tuning completed"
 
 echo "$(date): Step 4/4 - Evaluating both models on TruthfulQA dataset..."
-python evaluate_models.py --combined_model_path models/ppo_finetuned --nim_model_path models/nim_ppo_finetuned --output_dir evaluation_results
+python main.py --mode evaluate --combined_model_path models/ppo_finetuned --nim_model_path models/nim_ppo_finetuned --output_dir evaluation_results
 echo "$(date): Evaluation completed"
 
 echo "$(date): Verifying all model weights were saved correctly..."
-python verify_models.py
+python main.py --mode verify
 
 echo "$(date): All training steps completed. Results summary:"
 
