@@ -492,7 +492,9 @@ def main():
             # Use our static test dataset for demonstration
             logger.info("Using static test dataset for PPO training")
             test_data = create_static_test_dataset()
-            dataset = {"prompt": test_data["train"]["post"]}
+            # Extract the prompts/history from each sample in the train dataset
+            prompts = [sample["history"] for sample in test_data["train"]]
+            dataset = {"prompt": prompts}
         
         # Train with PPO
         ppo_trainer.train(
