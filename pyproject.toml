@@ -2,7 +2,7 @@
 [project]
 name = "REALM"
 version = "1.0.0" 
-dependencies = ["torch", "transformers", "accelerate", "google-genai", "datasets", "peft", "trl", "wandb", "pandas", "numpy", "scikit-learn", "pydantic", "tqdm", "python-dotenv", "fastapi", "uvicorn", "requests", "openai", "sentence-transformers"]
+dependencies = ["torch", "transformers", "accelerate", "google-genai", "datasets", "peft", "trl", "wandb", "pandas", "numpy", "scikit-learn", "pydantic", "tqdm", "python-dotenv", "fastapi", "uvicorn", "requests", "openai", "sentence-transformers", "matplotlib"]
 requires-python = ">=3.13"
 
 [build-system]
