@@ -47,18 +47,27 @@ def submit_togetherai_job(script_path: str, config_path: str, job_name: str, dep
     if compute_spec:
         logger.info(f"  Compute Spec: {compute_spec}") # e.g., {'gpu': 'A100', 'memory': '64G'}
 
-    # --- Actual Together AI job submission call ---
-    # !! IMPORTANT: Replace placeholder values below !!
-    togetherai_image = "your_docker_image:latest" # <<< REPLACE THIS
-    togetherai_working_dir = "/mnt/together-ai-storage/my_realm_project" # <<< REPLACE THIS
-    togetherai_outputs = ["outputs/default_output_dir"] # <<< REPLACE THIS
-    # Assuming script_path and config_path are relative to the project root being uploaded
-    # Inputs might map local paths/dirs to paths inside the container's working_dir
+    # --- Together AI job submission configuration ---
+    # Custom Docker image - you'll need to build and push this to a registry
+    # For example: docker build -t yourusername/realm:latest .
+    #              docker push yourusername/realm:latest
+    togetherai_image = "yourusername/realm:latest" # Replace with your actual image repository/name
+    
+    # Together AI working directory - this is where your code will be placed
+    togetherai_working_dir = "/workspace" # This matches our Dockerfile WORKDIR
+    
+    # Output directories to preserve after job completion
+    togetherai_outputs = [
+        "outputs",          # Main outputs directory created in Dockerfile
+        "models",           # Saved model files
+        "logs"              # Log files
+    ]
+    
+    # Inputs configuration - how your local files are uploaded to Together AI
     togetherai_inputs = {
-        "project_code": ".", # Uploads the current directory (where this script runs)
-        # Adjust input paths if necessary, e.g., map specific files/dirs
-        # os.path.basename(config_path): config_path,
-        # os.path.basename(script_path): script_path,
+        "project_code": ".", # Uploads the entire project directory
+        # If you have large files that shouldn't be uploaded with every job,
+        # you can store them on Together AI storage and reference them specifically
     }
 
     try:
