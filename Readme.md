@@ -11,6 +11,7 @@ This repository provides a production-ready implementation of a combined reward 
 - 🔄 Ready-to-use implementations for PPO and DPO fine-tuning
 - 🐳 Docker support for reproducible deployment
 - 📊 Evaluation framework for comparing reward model performance on the official TruthfulQA dataset
+- ☁️ Training pipeline scripts for Brev and Lambda Labs platforms
 
 ## Installation
 
@@ -70,6 +71,7 @@ realm/
 │   └── embedding_utils.py    # Embedding utilities
 ├── main.py                   # Main entry point for all operations
 ├── brev_train_pipeline.sh    # Complete training pipeline script for Brev
+├── lambda_train_pipeline.sh  # Complete training pipeline script for Lambda Labs
 └── requirements.txt          # Dependencies
 ```
 
@@ -117,7 +119,7 @@ python main.py --mode dpo --model_path models/final_model.pt --dataset_path data
 ```
 
 
-### Comparing Models
+### Evaluating Models
 
 Compare the performance of both fine-tuned models on the official TruthfulQA dataset:
 
@@ -206,12 +208,14 @@ For evaluating model truthfulness, we use the official [TruthfulQA dataset](http
 
 - **API Usage**: The NIM Reward model is accessed via API, so be mindful of usage limits and costs.
 - **Throughput**: Batch processing and caching are implemented for optimal performance.
-- **Training on Brev**: For training on NVIDIA Brev, use the provided `brev_train_pipeline.sh` script.
+- **GPU Memory**: Training and inference have been optimized to run on consumer GPUs while still leveraging state-of-the-art models.
 
 
 ## Complete Training Pipeline
 
-To run the complete training pipeline on Brev, use:
+### Running on Brev
+
+To run the complete training pipeline on Brev:
 
 ```bash
 ./brev_train_pipeline.sh
@@ -223,6 +227,34 @@ This script will:
 3. Fine-tune a model using only the NIM reward with PPO
 4. Evaluate both fine-tuned models on the TruthfulQA dataset
 5. Verify all model weights were saved correctly
+
+After completion, you can download the results from Brev using:
+```bash
+brev pull <instance-name>:/app/models/final_model.pt ./models/
+brev pull -r <instance-name>:/app/models/ppo_finetuned ./models/
+brev pull -r <instance-name>:/app/models/nim_ppo_finetuned ./models/
+brev pull -r <instance-name>:/app/evaluation_results ./evaluation_results/
+```
+
+### Running on Lambda Labs
+
+To run the complete training pipeline on Lambda Labs:
+
+```bash
+./lambda_train_pipeline.sh
+```
+
+The Lambda Labs script includes additional features:
+- Comprehensive system and GPU information reporting
+- Automatic environment detection (conda vs pip)
+- Optional Weights & Biases integration (`export WANDB_API_KEY=your_key`)
+- Automatic result compression for easy download
+
+After completion, all results are compressed into `realm_results.tar.gz` which you can download from Lambda Labs using:
+```bash
+scp <username>@<lambda-instance-ip>:/path/to/realm_results.tar.gz /local/path/
+```
+Or through the Lambda Labs web console.
 
 
 ## Verifying Model Weights
